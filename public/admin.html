@@ -119,6 +119,7 @@
               <th>ชื่อ-นามสกุล</th>
               <th>ประเภทผู้ใช้</th>
               <th>วันที่สมัคร</th>
+              <th>จัดการ</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -246,7 +247,10 @@
           <td><strong>${escapeHtml(u.user_id)}</strong></td>
           <td>${escapeHtml(u.full_name)}</td>
           <td>${roleDisplay}</td>
-          <td>${new Date(u.created_at).toLocaleString('th-TH')}</td>`;
+          <td>${new Date(u.created_at).toLocaleString('th-TH')}</td>
+          <td>
+            <button class="button secondary sm" onclick="resetUserPassword('${escapeHtml(u.user_id)}')">รีเซ็ตรหัสผ่าน</button>
+          </td>`;
         usersTable.appendChild(row);
       });
     }
@@ -311,6 +315,16 @@
     
     // Attach function to window so it can be called from onclick handlers in table
     window.updateBookingStatus = updateBookingStatus;
+    window.resetUserPassword = async function(userId) {
+      if (!confirm(`คุณต้องการรีเซ็ตรหัสผ่านของผู้ใช้รหัส ${userId} เป็น "1234" ใช่หรือไม่?`)) return;
+      const res = await fetch(`/api/admin/users/${userId}/reset-password`, { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        alert(`รีเซ็ตรหัสผ่านสำเร็จ!\nรหัสผ่านชั่วคราวสำหรับผู้ใช้ ${userId} คือ: 1234`);
+      } else {
+        alert(data.error || 'เกิดข้อผิดพลาดในการรีเซ็ตรหัสผ่าน');
+      }
+    };
 
     loadRooms();
     loadBookings();

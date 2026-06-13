@@ -284,6 +284,19 @@ app.get('/api/admin/users', requireAdmin, (req, res) => {
   });
 });
 
+app.post('/api/admin/users/:userId/reset-password', requireAdmin, (req, res) => {
+  const { userId } = req.params;
+  
+  // สร้างรหัสผ่านชั่วคราว "1234"
+  const { hash, salt } = hashPassword('1234');
+  
+  db.run('UPDATE users SET password_hash = ?, password_salt = ? WHERE user_id = ?', [hash, salt, userId], function (err) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (this.changes === 0) return res.status(404).json({ error: 'User not found' });
+    res.json({ success: true, userId });
+  });
+});
+
 // ═══════════════════════════════════════
 // User - การจองของฉัน (API สำหรับผู้ใช้ทั่วไปดูประวัติการจองของตนเอง และยกเลิกการจอง)
 // ═══════════════════════════════════════
