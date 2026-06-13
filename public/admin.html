@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Dashboard | ระบบจองห้องประชุม ทักษิณ</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-logo">
+        <span class="m-stripe-sm" style="width: 24px; height: 3px;"><span></span></span>
+        <div class="brand-mark">TSU</div>
+      </div>
+      <div class="brand-sub">ระบบผู้ดูแลระบบ</div>
+    </div>
+    <div class="nav-actions">
+      <a href="/index.html" class="text-link" style="font-size: 12px; margin-right: 16px;">หน้าหลัก</a>
+      <button class="button secondary sm" id="logoutBtn">ออกจากระบบ</button>
+    </div>
+  </div>
+
+  <div class="hero-band" style="min-height: 200px; padding: var(--space-xl) var(--space-xxl);">
+    <div class="hero-content">
+      <h1 class="display-sm fade-in-up">Admin Management.</h1>
+      <p class="fade-in-up" style="animation-delay: 0.1s;">ระบบจัดการห้องประชุมและตรวจสอบรายการจอง</p>
+    </div>
+  </div>
+
+  <div class="container section">
+    
+    <!-- สร้าง / แก้ไขห้อง -->
+    <div class="panel fade-in-up" style="animation-delay: 0.2s;">
+      <h2 class="panel-title">สร้าง / แก้ไขห้อง</h2>
+      <div class="grid-2" style="margin-bottom: var(--space-md);">
+        <div class="field">
+          <label for="name">ชื่อห้อง</label>
+          <input id="name" placeholder="ระบุชื่อห้อง" />
+        </div>
+        <div class="field">
+          <label for="location">ตำแหน่ง</label>
+          <input id="location" placeholder="ระบุตำแหน่งหรืออาคาร" />
+        </div>
+      </div>
+      <div class="grid-2" style="margin-bottom: var(--space-md);">
+        <div class="field">
+          <label for="capacity">ความจุ (คน)</label>
+          <input id="capacity" type="number" placeholder="เช่น 40" />
+        </div>
+        <div class="field">
+          <label for="active">สถานะการใช้งาน</label>
+          <select id="active">
+            <option value="1">เปิดใช้งาน</option>
+            <option value="0">ปิดใช้งานชั่วคราว</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label for="description">รายละเอียดเพิ่มเติม</label>
+        <textarea id="description" rows="3" placeholder="ระบุอุปกรณ์ที่มี หรือรายละเอียดอื่นๆ"></textarea>
+      </div>
+      <button class="button primary" id="saveRoomBtn">บันทึกข้อมูลห้อง</button>
+    </div>
+
+    <!-- รายการห้อง -->
+    <div class="panel fade-in-up" style="animation-delay: 0.3s;">
+      <div class="panel-header" style="border-bottom:none; padding-bottom: 0;">
+        <h2 class="panel-title" style="margin: 0;">รายการห้องทั้งหมด</h2>
+      </div>
+      <div style="overflow-x: auto;">
+        <table class="room-table" id="roomsTable">
+          <thead>
+            <tr>
+              <th>ชื่อ</th>
+              <th>ตำแหน่ง</th>
+              <th>ความจุ</th>
+              <th>สถานะ</th>
+              <th>จัดการ</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- รายงานการจอง -->
+    <div class="panel fade-in-up" style="animation-delay: 0.4s;">
+      <div class="panel-header" style="border-bottom:none; padding-bottom: 0;">
+        <h2 class="panel-title" style="margin: 0;">รายงานการจองล่าสุด</h2>
+      </div>
+      <div style="overflow-x: auto;">
+        <table class="booking-table" id="bookingsTable">
+          <thead>
+            <tr>
+              <th>รหัสผู้จอง</th>
+              <th>ประเภท</th>
+              <th>ห้อง</th>
+              <th>ช่วงเวลา</th>
+              <th>สถานะ</th>
+              <th>จัดการ / หมายเหตุ</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <div class="m-stripe" style="margin-bottom: var(--space-xl);"><span></span></div>
+    <p>&copy; 2026 มหาวิทยาลัยทักษิณ วิทยาเขตพัทลุง. สงวนลิขสิทธิ์.</p>
+  </div>
+
+  <script>
+    const logoutBtn = document.getElementById('logoutBtn');
+    const saveRoomBtn = document.getElementById('saveRoomBtn');
+    const roomsTable = document.getElementById('roomsTable').querySelector('tbody');
+    const bookingsTable = document.getElementById('bookingsTable').querySelector('tbody');
+
+    let editRoomId = null;
+
+    function escapeHtml(unsafe) {
+      return (unsafe || '').toString()
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    async function loadRooms() {
+      const res = await fetch('/api/admin/rooms');
+      const rooms = await res.json();
+      roomsTable.innerHTML = '';
+      rooms.forEach(room => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td><strong>${room.name}</strong></td>
+          <td>${room.location}</td>
+          <td>${room.capacity} คน</td>
+          <td>${room.active ? '<span class="status status-confirmed">ใช้งาน</span>' : '<span class="status status-cancelled">ไม่ใช้งาน</span>'}</td>
+          <td>
+            <button class="button secondary sm" data-id="${room.id}" data-action="edit" style="margin-right: 8px;">แก้ไข</button>
+            <button class="button danger sm" data-id="${room.id}" data-action="delete">ลบ</button>
+          </td>`;
+        roomsTable.appendChild(row);
+      });
+    }
+
+    async function updateBookingStatus(id, newStatus) {
+      if (!confirm('ยืนยันการเปลี่ยนสถานะการจอง?')) return;
+      const res = await fetch(`/api/admin/bookings/${id}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (res.ok) {
+        loadBookings();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'เกิดข้อผิดพลาด');
+      }
+    }
+
+    async function loadBookings() {
+      const res = await fetch('/api/admin/bookings');
+      const bookings = await res.json();
+      bookingsTable.innerHTML = '';
+      bookings.forEach(b => {
+        const row = document.createElement('tr');
+        
+        let statusBadge = '';
+        if (b.status === 'pending') statusBadge = '<span class="status status-pending">⏳ รอการอนุมัติ</span>';
+        else if (b.status === 'confirmed') statusBadge = '<span class="status status-confirmed">✓ อนุมัติแล้ว</span>';
+        else if (b.status === 'completed') statusBadge = '<span class="status status-completed">● เสร็จสิ้น</span>';
+        else if (b.status === 'cancelled') statusBadge = '<span class="status status-cancelled">✕ ยกเลิก</span>';
+        else statusBadge = `<span class="status">${escapeHtml(b.status)}</span>`;
+
+        let actionHtml = escapeHtml(b.note) || '-';
+        if (b.status === 'pending') {
+          actionHtml = `
+            <button class="button primary sm" onclick="updateBookingStatus(${b.id}, 'confirmed')" style="margin-right: 8px;">อนุมัติ</button>
+            <button class="button danger sm" onclick="updateBookingStatus(${b.id}, 'cancelled')">ปฏิเสธ</button>
+          `;
+        } else if (b.status === 'confirmed') {
+          actionHtml = `
+            <button class="button secondary sm" onclick="updateBookingStatus(${b.id}, 'completed')">ทำเครื่องหมายว่าเสร็จสิ้น</button>
+          `;
+        }
+
+        row.innerHTML = `
+          <td>
+            <div><strong>${escapeHtml(b.booker_name) || 'ไม่ระบุชื่อ'}</strong></div>
+            <div style="font-size:12px; color:var(--color-muted);">${escapeHtml(b.booker_id)}</div>
+          </td>
+          <td>${b.booker_type === 'staff' ? '<strong style="color:var(--color-m-blue-light)">บุคลากร</strong>' : 'นิสิต'}</td>
+          <td>${escapeHtml(b.room_name) || '<span style="color:var(--color-m-red)">(ห้องถูกลบ)</span>'}</td>
+          <td>${new Date(b.start).toLocaleString('th-TH')} - ${new Date(b.end).toLocaleString('th-TH')}</td>
+          <td>${statusBadge}</td>
+          <td>${actionHtml}</td>`;
+        bookingsTable.appendChild(row);
+      });
+    }
+
+    async function saveRoom() {
+      const name = document.getElementById('name').value.trim();
+      const location = document.getElementById('location').value.trim();
+      const capacity = document.getElementById('capacity').value.trim();
+      const description = document.getElementById('description').value.trim();
+      const active = document.getElementById('active').value;
+      if (!name || !location || !capacity) return alert('กรุณากรอกข้อมูลห้องให้ครบ');
+      const body = { name, location, capacity: Number(capacity), description, active: active === '1' };
+      const url = editRoomId ? `/api/admin/rooms/${editRoomId}` : '/api/admin/rooms';
+      const method = editRoomId ? 'PUT' : 'POST';
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const data = await res.json();
+      if (data.error) return alert(data.error);
+      editRoomId = null;
+      document.getElementById('name').value = '';
+      document.getElementById('location').value = '';
+      document.getElementById('capacity').value = '';
+      document.getElementById('description').value = '';
+      document.getElementById('active').value = '1';
+      saveRoomBtn.textContent = 'บันทึกข้อมูลห้อง';
+      loadRooms();
+    }
+
+    roomsTable.addEventListener('click', async (event) => {
+      const button = event.target.closest('button');
+      if (!button) return;
+      const id = button.dataset.id;
+      const action = button.dataset.action;
+      if (action === 'edit') {
+        const res = await fetch('/api/admin/rooms');
+        const rooms = await res.json();
+        const room = rooms.find(r => r.id === Number(id));
+        if (!room) return;
+        editRoomId = room.id;
+        document.getElementById('name').value = room.name;
+        document.getElementById('location').value = room.location;
+        document.getElementById('capacity').value = room.capacity;
+        document.getElementById('description').value = room.description;
+        document.getElementById('active').value = room.active ? '1' : '0';
+        saveRoomBtn.textContent = 'อัปเดตข้อมูลห้อง';
+        window.scrollTo(0, 0);
+      }
+      if (action === 'delete') {
+        if (!confirm('ลบห้องนี้หรือไม่?')) return;
+        await fetch(`/api/admin/rooms/${id}`, { method: 'DELETE' });
+        loadRooms();
+      }
+    });
+
+    logoutBtn.addEventListener('click', async () => {
+      await fetch('/api/logout');
+      window.location.href = '/login.html';
+    });
+
+    saveRoomBtn.addEventListener('click', saveRoom);
+    
+    // Attach function to window so it can be called from onclick handlers in table
+    window.updateBookingStatus = updateBookingStatus;
+
+    loadRooms();
+    loadBookings();
+  </script>
+  <script src="/app.js"></script>
+</body>
+</html>

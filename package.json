@@ -1,0 +1,14 @@
+{
+  "name": "room-booking-prototype",
+  "version": "1.0.0",
+  "description": "Prototype ระบบจองห้องประชุมสำหรับนิสิตและผู้ดูแล",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.6",
+    "express": "^4.18.2",
+    "sqlite3": "^5.1.6"
+  }
+}

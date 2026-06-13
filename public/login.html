@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>เข้าสู่ระบบ | ระบบจองห้องประชุม ทักษิณ</title>
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    .tab-group { display: flex; margin-bottom: var(--space-lg); border-bottom: 1px solid var(--color-hairline); }
+    .tab-btn { flex: 1; padding: var(--space-sm) 0; background: none; border: none; color: var(--color-muted); font-family: var(--font-display); font-size: 14px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; position: relative; transition: color 0.2s; }
+    .tab-btn.active { color: var(--color-on-dark); }
+    .tab-btn.active::after { content: ''; position: absolute; bottom: -1px; left: 0; right: 0; height: 2px; background: var(--color-on-dark); }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .success-msg { color: var(--color-success); margin-top: var(--space-md); font-size: 14px; font-weight: 300; text-align: center; }
+    .divider { display: flex; align-items: center; gap: var(--space-md); margin: var(--space-lg) 0; color: var(--color-muted); font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
+    .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--color-hairline); }
+  </style>
+</head>
+<body class="login-page">
+  <img src="/login-bg.png" alt="University Campus Night" class="login-bg" />
+  <div class="login-overlay"></div>
+  
+  <div class="login-container">
+    <div class="login-brand fade-in-up">
+      <div class="brand-mark">TSU<span class="m-stripe-sm" style="display:inline-flex; width: 40px; height: 4px; margin: 0 8px; vertical-align: middle;"><span></span></span></div>
+      <div class="brand-sub">ระบบจองห้องประชุม มหาวิทยาลัยทักษิณ วิทยาเขตพัทลุง</div>
+    </div>
+
+    <div class="login-card fade-in-up" style="animation-delay: 0.1s;">
+      <!-- Tab สลับ Login / Register -->
+      <div class="tab-group">
+        <button class="tab-btn active" data-tab="login">เข้าสู่ระบบ</button>
+        <button class="tab-btn" data-tab="register">สมัครสมาชิก</button>
+      </div>
+
+      <!-- ═══ Tab: เข้าสู่ระบบ ═══ -->
+      <div class="tab-content active" id="tab-login">
+        <div class="field">
+          <label for="loginRole">ประเภทผู้ใช้</label>
+          <select id="loginRole">
+            <option value="student">นิสิต</option>
+            <option value="staff">บุคลากร</option>
+            <option value="admin">ผู้ดูแลระบบ (Admin)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="loginUserId">รหัสผู้ใช้</label>
+          <input id="loginUserId" placeholder="กรอกรหัสนิสิต / รหัสบุคลากร" />
+        </div>
+        <div class="field">
+          <label for="loginPassword">รหัสผ่าน</label>
+          <input id="loginPassword" type="password" placeholder="กรอกรหัสผ่าน" />
+        </div>
+        <button class="button primary" style="width: 100%; margin-top: var(--space-sm);" id="loginBtn">เข้าสู่ระบบ</button>
+        <div class="message" id="loginMessage"></div>
+      </div>
+
+      <!-- ═══ Tab: สมัครสมาชิก ═══ -->
+      <div class="tab-content" id="tab-register">
+        <div class="field">
+          <label for="regRole">ประเภทผู้ใช้</label>
+          <select id="regRole">
+            <option value="student">นิสิต</option>
+            <option value="staff">บุคลากร</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="regUserId">รหัสนิสิต / รหัสบุคลากร</label>
+          <input id="regUserId" placeholder="เช่น 640123456 หรือ ST001" />
+        </div>
+        <div class="field">
+          <label for="regFullName">ชื่อ-นามสกุล</label>
+          <input id="regFullName" placeholder="กรอกชื่อ-นามสกุล" />
+        </div>
+        <div class="field">
+          <label for="regPassword">รหัสผ่าน</label>
+          <input id="regPassword" type="password" placeholder="อย่างน้อย 4 ตัวอักษร" />
+        </div>
+        <div class="field">
+          <label for="regPasswordConfirm">ยืนยันรหัสผ่าน</label>
+          <input id="regPasswordConfirm" type="password" placeholder="กรอกรหัสผ่านอีกครั้ง" />
+        </div>
+        <button class="button primary" style="width: 100%; margin-top: var(--space-sm);" id="registerBtn">สมัครสมาชิก</button>
+        <div class="message" id="regMessage"></div>
+        <div class="success-msg" id="regSuccess" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ── Tab switching ──
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+      });
+    });
+
+    // ── Dynamic label update ──
+    const loginRole = document.getElementById('loginRole');
+    const loginUserIdInput = document.getElementById('loginUserId');
+    loginRole.addEventListener('change', () => {
+      const labels = { student: 'รหัสนิสิต', staff: 'รหัสบุคลากร', admin: 'รหัสผู้ดูแลระบบ' };
+      loginUserIdInput.placeholder = `กรอก${labels[loginRole.value]}`;
+      loginUserIdInput.parentElement.querySelector('label').textContent = labels[loginRole.value];
+    });
+
+    // ── Login ──
+    document.getElementById('loginBtn').addEventListener('click', async () => {
+      const loginMessage = document.getElementById('loginMessage');
+      loginMessage.textContent = '';
+      const role = loginRole.value;
+      const userId = loginUserIdInput.value.trim();
+      const password = document.getElementById('loginPassword').value;
+
+      if (!userId || !password) {
+        loginMessage.textContent = 'กรุณากรอกรหัสผู้ใช้และรหัสผ่าน';
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ role, userId, password })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          loginMessage.textContent = data.error || 'เกิดข้อผิดพลาด';
+          return;
+        }
+        if (data.role === 'admin') {
+          window.location.href = '/admin.html';
+        } else {
+          window.location.href = '/index.html';
+        }
+      } catch (e) {
+        loginMessage.textContent = 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้';
+      }
+    });
+
+    // ── Register ──
+    document.getElementById('registerBtn').addEventListener('click', async () => {
+      const regMessage = document.getElementById('regMessage');
+      const regSuccess = document.getElementById('regSuccess');
+      regMessage.textContent = '';
+      regSuccess.style.display = 'none';
+
+      const role = document.getElementById('regRole').value;
+      const userId = document.getElementById('regUserId').value.trim();
+      const fullName = document.getElementById('regFullName').value.trim();
+      const password = document.getElementById('regPassword').value;
+      const passwordConfirm = document.getElementById('regPasswordConfirm').value;
+
+      if (!userId || !fullName || !password) {
+        regMessage.textContent = 'กรุณากรอกข้อมูลให้ครบ';
+        return;
+      }
+      if (password !== passwordConfirm) {
+        regMessage.textContent = 'รหัสผ่านไม่ตรงกัน กรุณากรอกใหม่';
+        return;
+      }
+      if (password.length < 4) {
+        regMessage.textContent = 'รหัสผ่านต้องมีอย่างน้อย 4 ตัวอักษร';
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, fullName, password, role })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          regMessage.textContent = data.error || 'เกิดข้อผิดพลาด';
+          return;
+        }
+        regSuccess.textContent = `✓ สมัครสมาชิกสำเร็จ! คุณสามารถเข้าสู่ระบบด้วยรหัส "${userId}" ได้แล้ว`;
+        regSuccess.style.display = 'block';
+        // Clear form
+        document.getElementById('regUserId').value = '';
+        document.getElementById('regFullName').value = '';
+        document.getElementById('regPassword').value = '';
+        document.getElementById('regPasswordConfirm').value = '';
+      } catch (e) {
+        regMessage.textContent = 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้';
+      }
+    });
+  </script>
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,96 @@
+const sqlite3 = require('sqlite3').verbose();
+const path = require('path');
+const crypto = require('crypto');
+
+const dbFile = path.join(__dirname, 'data.sqlite');
+const db = new sqlite3.Database(dbFile);
+
+// ── Password hashing (SHA-256 + salt) ──
+function hashPassword(password, salt) {
+  if (!salt) salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.createHash('sha256').update(salt + password).digest('hex');
+  return { hash, salt };
+}
+
+function verifyPassword(password, hash, salt) {
+  const check = crypto.createHash('sha256').update(salt + password).digest('hex');
+  return check === hash;
+}
+
+function initialize() {
+  db.serialize(() => {
+    db.run(`CREATE TABLE IF NOT EXISTS rooms (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      location TEXT NOT NULL,
+      capacity INTEGER NOT NULL,
+      description TEXT,
+      active INTEGER NOT NULL DEFAULT 1
+    )`);
+
+    db.run(`CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL UNIQUE,
+      full_name TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'student',
+      password_hash TEXT NOT NULL,
+      password_salt TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`);
+
+    db.run(`CREATE TABLE IF NOT EXISTS bookings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      booker_id TEXT NOT NULL,
+      booker_type TEXT NOT NULL DEFAULT 'student',
+      room_id INTEGER NOT NULL,
+      start TEXT NOT NULL,
+      end TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      note TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(room_id) REFERENCES rooms(id)
+    )`);
+
+    // เพิ่ม column booker_type ถ้ายังไม่มี (สำหรับ database เดิม)
+    db.run(`ALTER TABLE bookings ADD COLUMN booker_type TEXT NOT NULL DEFAULT 'student'`, () => {});
+    // เปลี่ยนชื่อคอลัมน์ student_id เป็น booker_id สำหรับฐานข้อมูลเก่า (ถ้ามี)
+    db.run(`ALTER TABLE bookings RENAME COLUMN student_id TO booker_id`, () => {});
+
+    // ── สร้าง Admin account ตั้งต้น ──
+    db.get('SELECT COUNT(*) AS count FROM users WHERE role = ?', ['admin'], (err, row) => {
+      if (!err && row.count === 0) {
+        const { hash, salt } = hashPassword('admin123');
+        db.run('INSERT INTO users (user_id, full_name, role, password_hash, password_salt) VALUES (?, ?, ?, ?, ?)',
+          ['admin', 'ผู้ดูแลระบบ', 'admin', hash, salt]);
+      }
+    });
+
+    // ── ข้อมูลห้องประชุม ม.ทักษิณ วิทยาเขตพัทลุง ──
+    db.get('SELECT COUNT(*) AS count FROM rooms', (err, row) => {
+      if (!err && row.count === 0) {
+        const sampleRooms = [
+          ['ห้องประชุมป่าพะยอม', 'อาคารหอประชุมเฉลิมพระเกียรติ ชั้น 2', 200, 'ห้องประชุมขนาดใหญ่ รองรับงานสัมมนาและพิธีการ พร้อมระบบเสียงและโปรเจคเตอร์'],
+          ['ห้องประชุมควนขนุน', 'อาคารหอประชุมเฉลิมพระเกียรติ ชั้น 1 (ด้านหน้า)', 30, 'ห้องประชุมขนาดเล็ก เหมาะสำหรับประชุมกลุ่มย่อย'],
+          ['ห้องประชุมศรีบรรพต', 'อาคารหอประชุมเฉลิมพระเกียรติ ชั้น 1 (ห้องกระจก)', 80, 'ห้องประชุมขนาดใหญ่ ผนังกระจก บรรยากาศโปร่งโล่ง'],
+          ['ห้องประชุมศรีนครินทร์', 'อาคารหอประชุมเฉลิมพระเกียรติ ชั้น 1', 50, 'ห้องประชุมขนาดกลาง พร้อมโต๊ะประชุมและระบบนำเสนอ'],
+          ['ห้องประชุมราชพฤกษ์', 'อาคารสัมมนาคาร', 150, 'ห้องประชุมขนาดใหญ่ รองรับงานสัมมนาและอบรม พร้อมระบบแสงเสียงครบครัน'],
+          ['ห้องประชุมบัวหลวง', 'อาคารสัมมนาคาร', 60, 'ห้องประชุมขนาดกลาง เหมาะสำหรับประชุมเชิงปฏิบัติการ'],
+          ['ห้องประชุมบัวหลวง 1', 'อาคารสัมมนาคาร', 30, 'ห้องประชุมขนาดเล็ก พร้อมอุปกรณ์โสตทัศนูปกรณ์'],
+          ['ห้องประชุมบัวหลวง 2', 'อาคารสัมมนาคาร', 30, 'ห้องประชุมขนาดเล็ก พร้อมอุปกรณ์โสตทัศนูปกรณ์'],
+          ['ห้องประชุม MF 3200', 'อาคารเรียนรวม', 200, 'ห้องประชุมสัมมนาขนาดใหญ่ พร้อมระบบประชุมทางไกล (Video Conference)'],
+          ['ห้องประชุมจิรพรรณ (NS2112)', 'อาคารคณะพยาบาลศาสตร์ ชั้น 1', 40, 'ห้องประชุมคณะพยาบาลศาสตร์ พร้อมจอแสดงผลและระบบเสียง']
+        ];
+        const stmt = db.prepare('INSERT INTO rooms (name, location, capacity, description) VALUES (?, ?, ?, ?)');
+        sampleRooms.forEach(room => stmt.run(room));
+        stmt.finalize();
+      }
+    });
+  });
+}
+
+module.exports = {
+  db,
+  initialize,
+  hashPassword,
+  verifyPassword
+};

@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>หน้าจัดการการจอง | ระบบจองห้องประชุม ทักษิณ</title>
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    .booking-card { background:var(--color-surface-card); border:1px solid var(--color-hairline); margin-bottom:var(--space-md); transition: border-color 0.2s; }
+    .booking-card:hover { border-color:var(--color-muted); }
+    .booking-card-header { display:flex; align-items:center; justify-content:space-between; padding:var(--space-lg); border-bottom:1px solid var(--color-hairline); }
+    .booking-card-header .booking-id { font-size:12px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--color-muted); }
+    .booking-card-body { padding:var(--space-lg); display:grid; grid-template-columns: 1fr 1fr; gap: var(--space-lg); }
+    .booking-detail { display:flex; flex-direction:column; gap: 2px; }
+    .booking-detail .label { font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--color-muted); }
+    .booking-detail .value { font-size:14px; font-weight:300; color:var(--color-on-dark); }
+    .booking-detail .value strong { font-weight:700; }
+    .booking-card-footer { padding:var(--space-md) var(--space-lg); border-top:1px solid var(--color-hairline); display:flex; align-items:center; justify-content:space-between; }
+    .booking-card-footer .created { font-size:12px; color:var(--color-muted); }
+    .empty-state { text-align:center; padding: var(--space-xxl); }
+    .empty-state .icon { font-size:48px; margin-bottom:var(--space-lg); opacity:0.3; }
+    .empty-state h3 { font-family:var(--font-display); font-size:20px; font-weight:700; color:var(--color-on-dark); margin-bottom:var(--space-sm); }
+    .empty-state p { font-size:14px; font-weight:300; color:var(--color-muted); margin-bottom:var(--space-lg); }
+    @media(max-width:768px) { .booking-card-body { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-logo">
+        <span class="m-stripe-sm" style="width: 24px; height: 3px;"><span></span></span>
+        <div class="brand-mark">TSU</div>
+      </div>
+      <div class="brand-sub">ระบบจองห้องประชุม</div>
+    </div>
+    <div class="nav-actions">
+      <a href="/index.html" class="text-link" style="font-size: 12px; margin-right: 16px;">จองห้อง</a>
+      <button id="logoutBtn" class="button secondary sm">ออกจากระบบ</button>
+    </div>
+  </div>
+  
+  <div class="container section">
+    <div class="section-header fade-in-up">
+      <h2 class="section-title">การจองของฉัน</h2>
+      <span id="bookingCount" style="font-size:12px; color:var(--color-muted); letter-spacing:1px; text-transform:uppercase;"></span>
+    </div>
+
+    <!-- Category Tabs -->
+    <div class="category-tabs fade-in-up" style="animation-delay: 0.05s;">
+      <button class="category-tab active" data-filter="all">ทั้งหมด</button>
+      <button class="category-tab" data-filter="pending">รออนุมัติ</button>
+      <button class="category-tab" data-filter="confirmed">อนุมัติแล้ว</button>
+      <button class="category-tab" data-filter="completed">เสร็จสิ้น</button>
+      <button class="category-tab" data-filter="cancelled">ยกเลิก</button>
+    </div>
+    
+    <div id="bookingsList" class="fade-in-up" style="animation-delay: 0.1s;"></div>
+  </div>
+  
+  <div class="footer">
+    <div class="m-stripe" style="margin-bottom: var(--space-xl);"><span></span></div>
+    <p>&copy; 2026 มหาวิทยาลัยทักษิณ วิทยาเขตพัทลุง. สงวนลิขสิทธิ์.</p>
+  </div>
+
+  <script>
+    let allBookings = [];
+    let currentFilter = 'all';
+
+    function escapeHtml(unsafe) {
+      return (unsafe || '').toString()
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function formatDateThai(dateStr) {
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('th-TH', { weekday:'short', year:'numeric', month:'short', day:'numeric' }) 
+        + ' ' + d.toLocaleTimeString('th-TH', { hour:'2-digit', minute:'2-digit' }) + ' น.';
+    }
+
+    function getStatusBadge(status) {
+      const map = {
+        pending: '<span class="status status-pending">⏳ รอการอนุมัติ</span>',
+        confirmed: '<span class="status status-confirmed">✓ อนุมัติแล้ว</span>',
+        completed: '<span class="status status-completed">● เสร็จสิ้น</span>',
+        cancelled: '<span class="status status-cancelled">✕ ยกเลิก</span>'
+      };
+      return map[status] || `<span class="status">${status}</span>`;
+    }
+
+    function renderBookings(bookings) {
+      const container = document.getElementById('bookingsList');
+      container.innerHTML = '';
+
+      const filtered = currentFilter === 'all' ? bookings : bookings.filter(b => b.status === currentFilter);
+      document.getElementById('bookingCount').textContent = `${filtered.length} รายการ`;
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="panel empty-state">
+            <div class="icon">📋</div>
+            <h3>${currentFilter === 'all' ? 'ยังไม่มีการจอง' : 'ไม่มีรายการในหมวดนี้'}</h3>
+            <p>${currentFilter === 'all' ? 'เริ่มต้นจองห้องประชุมได้ที่หน้าหลัก' : 'ลองเลือกหมวดอื่นเพื่อดูรายการ'}</p>
+            ${currentFilter === 'all' ? '<a href="/index.html" class="button primary">ไปจองห้อง</a>' : ''}
+          </div>
+        `;
+        return;
+      }
+
+      filtered.forEach((b, i) => {
+        const card = document.createElement('div');
+        card.className = 'booking-card fade-in-up';
+        card.style.animationDelay = `${0.05 * (i + 1)}s`;
+
+        card.innerHTML = `
+          <div class="booking-card-header">
+            <span class="booking-id">การจอง #${b.id.toString().padStart(4, '0')}</span>
+            ${getStatusBadge(b.status)}
+          </div>
+          <div class="booking-card-body">
+            <div class="booking-detail">
+              <span class="label">ห้องประชุม</span>
+              <span class="value"><strong>${escapeHtml(b.room_name) || '<span style="color:var(--color-m-red)">(ห้องถูกลบ)</span>'}</strong></span>
+            </div>
+            <div class="booking-detail">
+              <span class="label">ตำแหน่ง</span>
+              <span class="value">${escapeHtml(b.room_location) || '-'}</span>
+            </div>
+            <div class="booking-detail">
+              <span class="label">เริ่มต้น</span>
+              <span class="value">${formatDateThai(b.start)}</span>
+            </div>
+            <div class="booking-detail">
+              <span class="label">สิ้นสุด</span>
+              <span class="value">${formatDateThai(b.end)}</span>
+            </div>
+            ${b.note ? `<div class="booking-detail" style="grid-column: 1 / -1;"><span class="label">หมายเหตุ</span><span class="value">${escapeHtml(b.note)}</span></div>` : ''}
+          </div>
+          <div class="booking-card-footer">
+            <span class="created">สร้างเมื่อ ${formatDateThai(b.created_at)}</span>
+            ${b.status !== 'cancelled' && b.status !== 'completed' ? `<button class="button danger sm" data-id="${b.id}">ยกเลิกการจอง</button>` : ''}
+          </div>
+        `;
+        container.appendChild(card);
+      });
+
+      // Attach cancel handlers
+      container.querySelectorAll('button[data-id]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = btn.dataset.id;
+          if (!confirm('ยืนยันการยกเลิกการจอง #' + id + '?')) return;
+          const r = await fetch(`/api/user/bookings/${id}/cancel`, { method: 'POST' });
+          const data = await r.json();
+          if (r.ok) {
+            loadMyBookings();
+          } else {
+            alert(data.error || 'เกิดข้อผิดพลาด');
+          }
+        });
+      });
+    }
+
+    async function loadMyBookings() {
+      const res = await fetch('/api/user/bookings');
+      if (!res.ok) return window.location.href = '/login.html';
+      allBookings = await res.json();
+      renderBookings(allBookings);
+    }
+
+    // Tab filters
+    document.querySelectorAll('.category-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.category-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        currentFilter = tab.dataset.filter;
+        renderBookings(allBookings);
+      });
+    });
+
+    document.addEventListener('DOMContentLoaded', () => loadMyBookings());
+  </script>
+  <script src="/app.js"></script>
+</body>
+</html>
