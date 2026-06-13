@@ -1,13 +1,22 @@
+// นำเข้าโมดูล sqlite3 สำหรับจัดการฐานข้อมูล SQLite
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+// นำเข้าโมดูล crypto สำหรับเข้ารหัสข้อมูล (เช่น รหัสผ่าน)
 const crypto = require('crypto');
 
-const dbFile = path.join(__dirname, 'data.sqlite');
+// กำหนดตำแหน่งที่เก็บไฟล์ฐานข้อมูล
+// ใช้ persistent disk ของ Render ถ้ามี, ไม่งั้น fallback ไป local
+const dataDir = process.env.RENDER_DATA_DIR || __dirname;
+const dbFile = path.join(dataDir, 'data.sqlite');
+// สร้างหรือเชื่อมต่อกับไฟล์ฐานข้อมูล SQLite
 const db = new sqlite3.Database(dbFile);
 
 // ── Password hashing (SHA-256 + salt) ──
+// ฟังก์ชันสำหรับเข้ารหัสรหัสผ่าน เพื่อป้องกันการเก็บรหัสผ่านเป็นข้อความธรรมดา
 function hashPassword(password, salt) {
+  // หากไม่มี Salt (สำหรับผู้ใช้ใหม่) ให้สุ่มชุดอักขระขึ้นมา
   if (!salt) salt = crypto.randomBytes(16).toString('hex');
+  // นำ Salt มาต่อกับรหัสผ่าน แล้วนำไปเข้ารหัสด้วยวิธี SHA-256
   const hash = crypto.createHash('sha256').update(salt + password).digest('hex');
   return { hash, salt };
 }
@@ -17,8 +26,10 @@ function verifyPassword(password, hash, salt) {
   return check === hash;
 }
 
+// ฟังก์ชันเตรียมความพร้อมของฐานข้อมูล (สร้างตารางและข้อมูลเริ่มต้น)
 function initialize() {
   db.serialize(() => {
+    // สร้างตารางข้อมูลห้องประชุม (rooms) หากยังไม่มี
     db.run(`CREATE TABLE IF NOT EXISTS rooms (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -28,6 +39,7 @@ function initialize() {
       active INTEGER NOT NULL DEFAULT 1
     )`);
 
+    // สร้างตารางข้อมูลผู้ใช้งาน (users) หากยังไม่มี
     db.run(`CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id TEXT NOT NULL UNIQUE,
@@ -38,6 +50,7 @@ function initialize() {
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`);
 
+    // สร้างตารางข้อมูลการจอง (bookings) หากยังไม่มี
     db.run(`CREATE TABLE IF NOT EXISTS bookings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       booker_id TEXT NOT NULL,
@@ -57,6 +70,7 @@ function initialize() {
     db.run(`ALTER TABLE bookings RENAME COLUMN student_id TO booker_id`, () => {});
 
     // ── สร้าง Admin account ตั้งต้น ──
+    // ตรวจสอบว่าในระบบมีแอดมินหรือยัง ถ้ายังให้สร้างแอดมินเริ่มต้น
     db.get('SELECT COUNT(*) AS count FROM users WHERE role = ?', ['admin'], (err, row) => {
       if (!err && row.count === 0) {
         const { hash, salt } = hashPassword('admin123');
@@ -66,6 +80,7 @@ function initialize() {
     });
 
     // ── ข้อมูลห้องประชุม ม.ทักษิณ วิทยาเขตพัทลุง ──
+    // ตรวจสอบว่ามีห้องในระบบหรือยัง ถ้ายังให้เพิ่มข้อมูลห้องตัวอย่างลงไป
     db.get('SELECT COUNT(*) AS count FROM rooms', (err, row) => {
       if (!err && row.count === 0) {
         const sampleRooms = [

@@ -121,6 +121,7 @@
 
     let editRoomId = null;
 
+    // ฟังก์ชันสำหรับป้องกัน XSS (Cross-Site Scripting) โดยแปลงอักขระพิเศษเป็น HTML entities เพื่อความปลอดภัยในการแสดงผล
     function escapeHtml(unsafe) {
       return (unsafe || '').toString()
         .replace(/&/g, "&amp;")
@@ -130,6 +131,7 @@
         .replace(/'/g, "&#039;");
     }
 
+    // ฟังก์ชันโหลดข้อมูลห้องประชุมทั้งหมดมาสร้างเป็นตาราง พร้อมสร้างปุ่ม "แก้ไข" และ "ลบ" สำหรับห้องนั้นๆ
     async function loadRooms() {
       const res = await fetch('/api/admin/rooms');
       const rooms = await res.json();
@@ -149,6 +151,7 @@
       });
     }
 
+    // ฟังก์ชันสำหรับอัปเดตสถานะของการจอง (เช่น เปลี่ยนเป็น 'confirmed' อนุมัติ หรือ 'cancelled' ปฏิเสธ)
     async function updateBookingStatus(id, newStatus) {
       if (!confirm('ยืนยันการเปลี่ยนสถานะการจอง?')) return;
       const res = await fetch(`/api/admin/bookings/${id}/status`, {
@@ -164,6 +167,7 @@
       }
     }
 
+    // ฟังก์ชันโหลดรายงานการจองทั้งหมดมาแสดงในตาราง พร้อมทั้งสร้างปุ่มจัดการตามสถานะปัจจุบันของการจอง
     async function loadBookings() {
       const res = await fetch('/api/admin/bookings');
       const bookings = await res.json();
@@ -204,6 +208,7 @@
       });
     }
 
+    // ฟังก์ชันจัดการข้อมูลจากฟอร์มเพื่อสร้างห้องประชุมใหม่ (POST) หรืออัปเดตข้อมูลห้องเดิมที่กำลังแก้ไข (PUT)
     async function saveRoom() {
       const name = document.getElementById('name').value.trim();
       const location = document.getElementById('location').value.trim();
@@ -227,6 +232,7 @@
       loadRooms();
     }
 
+    // ดักจับเหตุการณ์เมื่อคลิกปุ่มบนตารางห้องประชุม เพื่อตรวจสอบว่าคลิกปุ่ม "แก้ไข" (ดึงข้อมูลมาใส่ฟอร์ม) หรือปุ่ม "ลบ" (ลบข้อมูล)
     roomsTable.addEventListener('click', async (event) => {
       const button = event.target.closest('button');
       if (!button) return;

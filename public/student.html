@@ -66,6 +66,7 @@
     let allBookings = [];
     let currentFilter = 'all';
 
+    // ฟังก์ชันป้องกัน XSS โดยแปลงอักขระพิเศษเป็น HTML Entities ก่อนนำไปแสดงผลบนหน้าเว็บ
     function escapeHtml(unsafe) {
       return (unsafe || '').toString()
         .replace(/&/g, "&amp;")
@@ -75,12 +76,14 @@
         .replace(/'/g, "&#039;");
     }
 
+    // ฟังก์ชันจัดรูปแบบวันที่ให้อ่านง่าย (แสดงเป็นภาษาไทย) สำหรับวันที่เริ่มและสิ้นสุดการจอง
     function formatDateThai(dateStr) {
       const d = new Date(dateStr);
       return d.toLocaleDateString('th-TH', { weekday:'short', year:'numeric', month:'short', day:'numeric' }) 
         + ' ' + d.toLocaleTimeString('th-TH', { hour:'2-digit', minute:'2-digit' }) + ' น.';
     }
 
+    // ฟังก์ชันเลือกป้ายสถานะ (Badge) ให้ตรงกับสถานะของการจอง เช่น รออนุมัติ, อนุมัติแล้ว
     function getStatusBadge(status) {
       const map = {
         pending: '<span class="status status-pending">⏳ รอการอนุมัติ</span>',
@@ -91,6 +94,8 @@
       return map[status] || `<span class="status">${status}</span>`;
     }
 
+    // ฟังก์ชันนำข้อมูลรายการจองมาแสดงเป็นรูปแบบการ์ด (Card) บนหน้าจอ 
+    // โดยกรองข้อมูล (Filter) ให้ตรงกับหมวดหมู่ที่ผู้ใช้เลือกใน Tab ด้านบน
     function renderBookings(bookings) {
       const container = document.getElementById('bookingsList');
       container.innerHTML = '';
@@ -147,7 +152,7 @@
         container.appendChild(card);
       });
 
-      // Attach cancel handlers
+      // ค้นหาปุ่ม "ยกเลิกการจอง" ทั้งหมดในการ์ดที่สร้างขึ้น และผูกเหตุการณ์เมื่อผู้ใช้คลิกให้ส่งคำขอยกเลิกไปที่ API
       container.querySelectorAll('button[data-id]').forEach(btn => {
         btn.addEventListener('click', async () => {
           const id = btn.dataset.id;
@@ -163,6 +168,7 @@
       });
     }
 
+    // ฟังก์ชันดึงข้อมูลประวัติการจองทั้งหมดของผู้ใช้งานคนปัจจุบัน (ตามคุกกี้ที่ล็อกอิน) จากเซิร์ฟเวอร์
     async function loadMyBookings() {
       const res = await fetch('/api/user/bookings');
       if (!res.ok) return window.location.href = '/login.html';
@@ -170,7 +176,7 @@
       renderBookings(allBookings);
     }
 
-    // Tab filters
+    // ผูกเหตุการณ์เมื่อผู้ใช้คลิกเปลี่ยน Tab หมวดหมู่ เพื่อสลับการแสดงผลรายการจอง
     document.querySelectorAll('.category-tab').forEach(tab => {
       tab.addEventListener('click', () => {
         document.querySelectorAll('.category-tab').forEach(t => t.classList.remove('active'));

@@ -140,6 +140,7 @@
     let selectedRoom = null;
 
     // ── Load user info ──
+    // ฟังก์ชันดึงข้อมูลผู้ใช้ที่กำลังล็อกอินอยู่จากเซิร์ฟเวอร์
     async function loadUser() {
       try {
         const res = await fetch('/api/me');
@@ -166,6 +167,7 @@
     }
 
     // ── Stats ──
+    // ฟังก์ชันดึงข้อมูลสถิติ (จำนวนห้องและความจุรวมทั้งหมด) มาแสดงในส่วน Hero ของหน้าแรก
     async function loadStats() {
       try {
         const res = await fetch('/api/rooms');
@@ -180,6 +182,7 @@
     }
 
     // ── DateTime ──
+    // ฟังก์ชันตั้งค่าเวลาต่ำสุดที่เลือกได้ (ป้องกันไม่ให้ผู้ใช้เลือกวันที่/เวลาในอดีต)
     function setMinDateTime() {
       const now = new Date();
       const offset = now.getTimezoneOffset();
@@ -209,6 +212,7 @@
     }
 
     // ── Rooms ──
+    // ฟังก์ชันดึงรายการห้องประชุมจากเซิร์ฟเวอร์ โดยรองรับการส่งคำค้นหาและช่วงเวลาเพื่อหาห้องว่าง
     async function loadRooms() {
       const search = searchInput.value.trim();
       const start = startInput.value;
@@ -256,12 +260,14 @@
     }
 
     // ── Booking Modal ──
+    // ฟังก์ชันจัดรูปแบบวันที่ให้อ่านง่าย (แปลงเป็นภาษาไทย)
     function formatDateThai(dateStr) {
       const d = new Date(dateStr);
       return d.toLocaleDateString('th-TH', { weekday:'long', year:'numeric', month:'long', day:'numeric' }) 
         + ' เวลา ' + d.toLocaleTimeString('th-TH', { hour:'2-digit', minute:'2-digit' }) + ' น.';
     }
 
+    // ฟังก์ชันเปิดหน้าต่าง (Modal) ยืนยันการจอง พร้อมดึงข้อมูลห้องที่เลือกมาแสดง
     function openBookingModal(room) {
       if (!validateDates()) return;
       if (!currentUser || currentUser.role === 'admin') {
@@ -290,6 +296,8 @@
       if (e.target === e.currentTarget) closeModal();
     });
 
+    // ผูกเหตุการณ์เมื่อผู้ใช้คลิกปุ่ม "ยืนยันจอง" ภายใน Modal
+    // ส่งข้อมูลการจองไปยังเซิร์ฟเวอร์ (API)
     document.getElementById('modalConfirm').addEventListener('click', async () => {
       if (!selectedRoom || !currentUser) return;
       const msgEl = document.getElementById('modalMessage');
@@ -327,6 +335,7 @@
       window.location.href = '/login.html';
     });
 
+    // ผูกเหตุการณ์เมื่อผู้ใช้คลิกปุ่ม "ค้นหา" ให้ตรวจสอบความถูกต้องของเวลา ก่อนโหลดข้อมูลห้องใหม่
     searchBtn.addEventListener('click', () => {
       const start = startInput.value;
       const end = endInput.value;

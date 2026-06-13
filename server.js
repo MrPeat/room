@@ -1,29 +1,43 @@
+// นำเข้าโมดูลที่จำเป็นสำหรับสร้าง Web Server และจัดการเส้นทาง
 const express = require('express');
 const path = require('path');
-const cookieParser = require('cookie-parser');
-const { db, initialize, hashPassword, verifyPassword } = require('./db');
+const cookieParser = require('cookie-parser'); // ใช้สำหรับอ่านค่าคุกกี้
+const { db, initialize, hashPassword, verifyPassword } = require('./db'); // นำเข้าฟังก์ชันเกี่ยวกับฐานข้อมูลจากไฟล์ db.js
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000; // กำหนดพอร์ตสำหรับรันเซิร์ฟเวอร์ (ค่าเริ่มต้นคือ 3000)
 
+// Trust proxy (จำเป็นสำหรับ Render / reverse proxy)
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
+// ตั้งค่าให้ Express เสิร์ฟไฟล์ static (HTML, CSS, JS, รูปภาพ) จากโฟลเดอร์ 'public'
 app.use(express.static(path.join(__dirname, 'public')));
+// อนุญาตให้เซิร์ฟเวอร์รับข้อมูลรูปแบบ JSON จาก Request Body
 app.use(express.json());
+// เปิดใช้งานการอ่านค่าคุกกี้ที่ส่งมาจากเบราว์เซอร์
 app.use(cookieParser());
 
+// เรียกใช้ฟังก์ชันสร้างตารางฐานข้อมูลเบื้องต้น
 initialize();
 
+// มิดเดิลแวร์ (Middleware) สำหรับตรวจสอบสิทธิ์ผู้ดูแลระบบ (Admin)
+// จะยอมให้ผ่านไปทำงานต่อได้เฉพาะผู้ที่ล็อกอินและมี role เป็น 'admin' เท่านั้น
 function requireAdmin(req, res, next) {
   if (req.cookies.role === 'admin' && req.cookies.userId) return next();
   return res.status(401).json({ error: 'Unauthorized' });
 }
 
+// มิดเดิลแวร์ (Middleware) สำหรับตรวจสอบว่าเข้าสู่ระบบหรือยัง
+// จะยอมให้ผ่านไปทำงานต่อได้ก็ต่อเมื่อมีข้อมูลล็อกอินในคุกกี้แล้วเท่านั้น
 function requireAuth(req, res, next) {
   if (req.cookies.role && req.cookies.userId) return next();
   return res.status(401).json({ error: 'Unauthorized' });
 }
 
 // ═══════════════════════════════════════
-// สมัครสมาชิก
+// สมัครสมาชิก (API Endpoint สำหรับสร้างบัญชีใหม่)
 // ═══════════════════════════════════════
 app.post('/api/register', (req, res) => {
   const { userId, fullName, password, role } = req.body;
@@ -53,7 +67,7 @@ app.post('/api/register', (req, res) => {
 });
 
 // ═══════════════════════════════════════
-// เข้าสู่ระบบ
+// เข้าสู่ระบบ (API Endpoint สำหรับตรวจสอบรหัสผ่านและสร้างคุกกี้ล็อกอิน)
 // ═══════════════════════════════════════
 app.post('/api/login', (req, res) => {
   const { role, userId, password } = req.body;
@@ -90,7 +104,7 @@ app.post('/api/login', (req, res) => {
 });
 
 // ═══════════════════════════════════════
-// ดึงข้อมูลผู้ใช้ปัจจุบัน
+// ดึงข้อมูลผู้ใช้ปัจจุบัน (API Endpoint สำหรับเช็คว่าใครกำลังล็อกอินอยู่)
 // ═══════════════════════════════════════
 app.get('/api/me', (req, res) => {
   const userId = req.cookies.userId;
@@ -105,7 +119,7 @@ app.get('/api/me', (req, res) => {
 });
 
 // ═══════════════════════════════════════
-// ห้องประชุม (Public)
+// รายการห้องประชุม (API Endpoint สาธารณะ สำหรับดึงรายชื่อห้องทั้งหมดและค้นหา)
 // ═══════════════════════════════════════
 app.get('/api/rooms', (req, res) => {
   const { status, start, end, search } = req.query;
@@ -142,7 +156,7 @@ app.get('/api/rooms', (req, res) => {
 });
 
 // ═══════════════════════════════════════
-// จองห้อง
+// สร้างการจองห้อง (API Endpoint สำหรับนิสิตหรือบุคลากรทำรายการจอง)
 // ═══════════════════════════════════════
 app.post('/api/bookings', requireAuth, (req, res) => {
   const { roomId, start, end, note } = req.body;
@@ -196,7 +210,7 @@ app.post('/api/bookings', requireAuth, (req, res) => {
 });
 
 // ═══════════════════════════════════════
-// Admin - จัดการห้อง
+// Admin - จัดการห้อง (กลุ่ม API สำหรับแอดมินใช้เพิ่ม/ลบ/แก้ไขข้อมูลห้อง)
 // ═══════════════════════════════════════
 app.get('/api/admin/rooms', requireAdmin, (req, res) => {
   db.all('SELECT * FROM rooms', (err, rows) => {
@@ -234,7 +248,7 @@ app.delete('/api/admin/rooms/:id', requireAdmin, (req, res) => {
 });
 
 // ═══════════════════════════════════════
-// Admin - จัดการการจอง
+// Admin - จัดการการจอง (กลุ่ม API สำหรับแอดมินดูรายการจองทั้งหมดและเปลี่ยนสถานะ)
 // ═══════════════════════════════════════
 app.get('/api/admin/bookings', requireAdmin, (req, res) => {
   db.all(`SELECT b.*, r.name AS room_name, u.full_name AS booker_name 
@@ -261,7 +275,7 @@ app.post('/api/admin/bookings/:id/status', requireAdmin, (req, res) => {
 });
 
 // ═══════════════════════════════════════
-// Admin - จัดการผู้ใช้
+// Admin - จัดการผู้ใช้ (API สำหรับแอดมินดูรายชื่อผู้ใช้ทั้งหมดในระบบ)
 // ═══════════════════════════════════════
 app.get('/api/admin/users', requireAdmin, (req, res) => {
   db.all('SELECT user_id, full_name, role, created_at FROM users ORDER BY created_at DESC', (err, rows) => {
@@ -271,7 +285,7 @@ app.get('/api/admin/users', requireAdmin, (req, res) => {
 });
 
 // ═══════════════════════════════════════
-// User - การจองของฉัน
+// User - การจองของฉัน (API สำหรับผู้ใช้ทั่วไปดูประวัติการจองของตนเอง และยกเลิกการจอง)
 // ═══════════════════════════════════════
 app.get('/api/user/bookings', (req, res) => {
   const userId = req.cookies.userId;
@@ -310,6 +324,6 @@ app.get('/api/logout', (req, res) => {
   res.json({ success: true });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on http://0.0.0.0:${PORT}`);
 });

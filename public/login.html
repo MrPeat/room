@@ -18,24 +18,28 @@
   </style>
 </head>
 <body class="login-page">
+  <!-- ส่วนภาพพื้นหลังของหน้าเว็บ และเลเยอร์สำหรับลดแสง (overlay) -->
   <img src="/login-bg.png" alt="University Campus Night" class="login-bg" />
   <div class="login-overlay"></div>
   
+  <!-- กรอบคอนเทนเนอร์หลักที่ครอบเนื้อหาทั้งหมด (กล่องตรงกลาง) -->
   <div class="login-container">
+    <!-- ส่วนหัวแสดงโลโก้และชื่อของระบบ -->
     <div class="login-brand fade-in-up">
       <div class="brand-mark">TSU<span class="m-stripe-sm" style="display:inline-flex; width: 40px; height: 4px; margin: 0 8px; vertical-align: middle;"><span></span></span></div>
       <div class="brand-sub">ระบบจองห้องประชุม มหาวิทยาลัยทักษิณ วิทยาเขตพัทลุง</div>
     </div>
 
     <div class="login-card fade-in-up" style="animation-delay: 0.1s;">
-      <!-- Tab สลับ Login / Register -->
+      <!-- กลุ่มปุ่ม Tab สำหรับคลิกสลับหน้าจอระหว่าง "เข้าสู่ระบบ" และ "สมัครสมาชิก" -->
       <div class="tab-group">
         <button class="tab-btn active" data-tab="login">เข้าสู่ระบบ</button>
         <button class="tab-btn" data-tab="register">สมัครสมาชิก</button>
       </div>
 
-      <!-- ═══ Tab: เข้าสู่ระบบ ═══ -->
+      <!-- ═══ Tab: เข้าสู่ระบบ (แสดงผลเป็นค่าเริ่มต้น) ═══ -->
       <div class="tab-content active" id="tab-login">
+        <!-- ส่วนเลือกประเภทผู้ใช้เพื่อปรับรูปแบบการล็อกอิน -->
         <div class="field">
           <label for="loginRole">ประเภทผู้ใช้</label>
           <select id="loginRole">
@@ -56,8 +60,9 @@
         <div class="message" id="loginMessage"></div>
       </div>
 
-      <!-- ═══ Tab: สมัครสมาชิก ═══ -->
+      <!-- ═══ Tab: สมัครสมาชิก (ซ่อนไว้เป็นค่าเริ่มต้น จะแสดงเมื่อกด Tab) ═══ -->
       <div class="tab-content" id="tab-register">
+        <!-- ฟอร์มสำหรับกรอกข้อมูลสมัครสมาชิกใหม่ -->
         <div class="field">
           <label for="regRole">ประเภทผู้ใช้</label>
           <select id="regRole">
@@ -90,6 +95,7 @@
 
   <script>
     // ── Tab switching ──
+    // จัดการการคลิกที่ปุ่ม Tab เพื่อสลับการแสดงผลระหว่างฟอร์มล็อกอินและฟอร์มสมัครสมาชิก
     document.querySelectorAll('.tab-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -100,6 +106,8 @@
     });
 
     // ── Dynamic label update ──
+    // ฟังก์ชันปรับเปลี่ยนข้อความ (Label) และตัวอย่างการกรอก (Placeholder) ของช่องรหัสผู้ใช้ 
+    // ให้สอดคล้องกับ "ประเภทผู้ใช้" ที่เลือกในขณะนั้น (นิสิต/บุคลากร/ผู้ดูแลระบบ)
     const loginRole = document.getElementById('loginRole');
     const loginUserIdInput = document.getElementById('loginUserId');
     loginRole.addEventListener('change', () => {
@@ -109,6 +117,7 @@
     });
 
     // ── Login ──
+    // ฟังก์ชันส่งข้อมูลเข้าสู่ระบบไปยังเซิร์ฟเวอร์ (API) เพื่อตรวจสอบความถูกต้อง
     document.getElementById('loginBtn').addEventListener('click', async () => {
       const loginMessage = document.getElementById('loginMessage');
       loginMessage.textContent = '';
@@ -143,6 +152,7 @@
     });
 
     // ── Register ──
+    // ฟังก์ชันส่งข้อมูลการสมัครสมาชิกใหม่ไปยังเซิร์ฟเวอร์ (API) เพื่อบันทึกลงฐานข้อมูล
     document.getElementById('registerBtn').addEventListener('click', async () => {
       const regMessage = document.getElementById('regMessage');
       const regSuccess = document.getElementById('regSuccess');
