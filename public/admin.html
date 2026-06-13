@@ -106,6 +106,26 @@
       </div>
     </div>
 
+    <!-- รายชื่อผู้ใช้งานระบบ -->
+    <div class="panel fade-in-up" style="animation-delay: 0.5s;">
+      <div class="panel-header" style="border-bottom:none; padding-bottom: 0;">
+        <h2 class="panel-title" style="margin: 0;">รายชื่อผู้ใช้งานระบบ</h2>
+      </div>
+      <div style="overflow-x: auto;">
+        <table class="room-table" id="usersTable">
+          <thead>
+            <tr>
+              <th>รหัสผู้ใช้</th>
+              <th>ชื่อ-นามสกุล</th>
+              <th>ประเภทผู้ใช้</th>
+              <th>วันที่สมัคร</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
   </div>
 
   <div class="footer">
@@ -118,6 +138,7 @@
     const saveRoomBtn = document.getElementById('saveRoomBtn');
     const roomsTable = document.getElementById('roomsTable').querySelector('tbody');
     const bookingsTable = document.getElementById('bookingsTable').querySelector('tbody');
+    const usersTable = document.getElementById('usersTable').querySelector('tbody');
 
     let editRoomId = null;
 
@@ -208,6 +229,28 @@
       });
     }
 
+    // ฟังก์ชันโหลดรายชื่อผู้ใช้งานทั้งหมดมาแสดงในตาราง
+    async function loadUsers() {
+      const res = await fetch('/api/admin/users');
+      const users = await res.json();
+      usersTable.innerHTML = '';
+      users.forEach(u => {
+        const row = document.createElement('tr');
+        
+        let roleDisplay = '';
+        if (u.role === 'admin') roleDisplay = '<strong style="color:var(--color-m-red)">ผู้ดูแลระบบ</strong>';
+        else if (u.role === 'staff') roleDisplay = '<strong style="color:var(--color-m-blue-light)">บุคลากร</strong>';
+        else roleDisplay = 'นิสิต';
+
+        row.innerHTML = `
+          <td><strong>${escapeHtml(u.user_id)}</strong></td>
+          <td>${escapeHtml(u.full_name)}</td>
+          <td>${roleDisplay}</td>
+          <td>${new Date(u.created_at).toLocaleString('th-TH')}</td>`;
+        usersTable.appendChild(row);
+      });
+    }
+
     // ฟังก์ชันจัดการข้อมูลจากฟอร์มเพื่อสร้างห้องประชุมใหม่ (POST) หรืออัปเดตข้อมูลห้องเดิมที่กำลังแก้ไข (PUT)
     async function saveRoom() {
       const name = document.getElementById('name').value.trim();
@@ -271,6 +314,7 @@
 
     loadRooms();
     loadBookings();
+    loadUsers();
   </script>
   <script src="/app.js"></script>
 </body>
