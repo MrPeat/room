@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>หน้าจัดการการจอง | ระบบจองห้องประชุม ทักษิณ</title>
   <link rel="stylesheet" href="/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <style>
     .booking-card { background:var(--color-surface-card); border:1px solid var(--color-hairline); margin-bottom:var(--space-md); transition: border-color 0.2s; }
     .booking-card:hover { border-color:var(--color-muted); }
@@ -146,23 +147,84 @@
           </div>
           <div class="booking-card-footer">
             <span class="created">สร้างเมื่อ ${formatDateThai(b.created_at)}</span>
-            ${b.status !== 'cancelled' && b.status !== 'completed' ? `<button class="button danger sm" data-id="${b.id}">ยกเลิกการจอง</button>` : ''}
+            <div style="display:flex; gap:8px;">
+              ${(b.status === 'pending' || b.status === 'confirmed') ? `<button class="button secondary sm" data-edit-id="${b.id}">แก้ไขเวลา</button>` : ''}
+              ${b.status !== 'cancelled' && b.status !== 'completed' ? `<button class="button danger sm" data-id="${b.id}">ยกเลิกการจอง</button>` : ''}
+            </div>
           </div>
         `;
         container.appendChild(card);
       });
 
-      // ค้นหาปุ่ม "ยกเลิกการจอง" ทั้งหมดในการ์ดที่สร้างขึ้น และผูกเหตุการณ์เมื่อผู้ใช้คลิกให้ส่งคำขอยกเลิกไปที่ API
       container.querySelectorAll('button[data-id]').forEach(btn => {
         btn.addEventListener('click', async () => {
           const id = btn.dataset.id;
-          if (!confirm('ยืนยันการยกเลิกการจอง #' + id + '?')) return;
+          const result = await Swal.fire({
+            title: 'ยืนยันการยกเลิก?',
+            text: `คุณต้องการยกเลิกการจอง #${id} ใช่หรือไม่`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'ใช่, ยกเลิกเลย',
+            cancelButtonText: 'ปิด'
+          });
+          if (!result.isConfirmed) return;
           const r = await fetch(`/api/user/bookings/${id}/cancel`, { method: 'POST' });
           const data = await r.json();
           if (r.ok) {
+            Swal.fire('ยกเลิกสำเร็จ', '', 'success');
             loadMyBookings();
           } else {
-            alert(data.error || 'เกิดข้อผิดพลาด');
+            Swal.fire('ผิดพลาด', data.error || 'เกิดข้อผิดพลาด', 'error');
+          }
+        });
+      });
+
+      container.querySelectorAll('button[data-edit-id]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = btn.dataset.editId;
+          const b = filtered.find(x => x.id == id);
+          if(!b) return;
+
+          const htmlForm = `
+            <div style="text-align:left; font-size: 14px;">
+              <label style="display:block; margin-top:10px;">เริ่มต้น:</label>
+              <input type="datetime-local" id="edit-start" class="swal2-input" style="max-width:90%; font-size:14px; margin: 0 auto; display: block;" value="${b.start.slice(0, 16)}">
+              <label style="display:block; margin-top:10px;">สิ้นสุด:</label>
+              <input type="datetime-local" id="edit-end" class="swal2-input" style="max-width:90%; font-size:14px; margin: 0 auto; display: block;" value="${b.end.slice(0, 16)}">
+              <label style="display:block; margin-top:10px;">หมายเหตุ:</label>
+              <input id="edit-note" class="swal2-input" style="max-width:90%; font-size:14px; margin: 0 auto; display: block;" value="${b.note || ''}" placeholder="หมายเหตุ">
+            </div>
+          `;
+
+          const result = await Swal.fire({
+            title: 'แก้ไขการจอง #' + id,
+            html: htmlForm,
+            showCancelButton: true,
+            confirmButtonText: 'บันทึก',
+            cancelButtonText: 'ยกเลิก',
+            preConfirm: () => {
+              const s = document.getElementById('edit-start').value;
+              const e = document.getElementById('edit-end').value;
+              const n = document.getElementById('edit-note').value;
+              if (!s || !e) { Swal.showValidationMessage('กรุณาระบุเวลาให้ครบ'); return false; }
+              return { start: new Date(s).toISOString(), end: new Date(e).toISOString(), note: n };
+            }
+          });
+
+          if (result.isConfirmed) {
+            const bodyData = result.value;
+            const r = await fetch(`/api/user/bookings/${id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(bodyData)
+            });
+            const data = await r.json();
+            if (r.ok) {
+              Swal.fire('สำเร็จ', 'แก้ไขข้อมูลการจองแล้ว', 'success');
+              loadMyBookings();
+            } else {
+              Swal.fire('ผิดพลาด', data.error || 'เกิดข้อผิดพลาด', 'error');
+            }
           }
         });
       });

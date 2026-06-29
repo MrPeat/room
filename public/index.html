@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>หน้าหลัก | ระบบจองห้องประชุม ทักษิณ</title>
   <link rel="stylesheet" href="/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <style>
     /* ── Booking Modal ── */
     .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:200; justify-content:center; align-items:center; backdrop-filter:blur(4px); }
@@ -66,10 +67,18 @@
   <div class="container section">
     <div class="panel fade-in-up" style="animation-delay: 0.2s;">
       <h2 class="panel-title">ค้นหาห้องว่าง</h2>
-      <div class="search-group">
+      <div class="search-group" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--space-md); align-items: end;">
         <div class="field">
           <label for="search">คำค้นหา</label>
-          <input id="search" placeholder="ชื่อห้อง, ตำแหน่ง หรือความจุ" />
+          <input id="search" placeholder="ชื่อห้อง, ตำแหน่ง" />
+        </div>
+        <div class="field">
+          <label for="capacity">ความจุขั้นต่ำ (คน)</label>
+          <input type="number" id="capacity" placeholder="เช่น 50" min="1" />
+        </div>
+        <div class="field">
+          <label for="facilities">สิ่งอำนวยความสะดวก</label>
+          <input id="facilities" placeholder="เช่น โปรเจคเตอร์, ปลั๊กพ่วง" />
         </div>
         <div class="field">
           <label for="start">เริ่มต้น</label>
@@ -79,7 +88,7 @@
           <label for="end">สิ้นสุด</label>
           <input type="datetime-local" id="end" />
         </div>
-        <button class="button primary" id="searchBtn">ค้นหา</button>
+        <button class="button primary" id="searchBtn" style="height: 42px;">ค้นหา</button>
       </div>
     </div>
 
@@ -132,6 +141,8 @@
   <script>
     const roomList = document.getElementById('roomList');
     const searchInput = document.getElementById('search');
+    const capacityInput = document.getElementById('capacity');
+    const facilitiesInput = document.getElementById('facilities');
     const startInput = document.getElementById('start');
     const endInput = document.getElementById('end');
     const searchBtn = document.getElementById('searchBtn');
@@ -204,10 +215,10 @@
     function validateDates() {
       const start = startInput.value;
       const end = endInput.value;
-      if (!start || !end) { alert('กรุณาเลือกช่วงเวลา'); return false; }
-      if (new Date(start) < new Date()) { alert('ไม่สามารถจองวันที่ผ่านมาแล้วได้'); return false; }
-      if (new Date(end) <= new Date(start)) { alert('วันสิ้นสุดต้องอยู่หลังวันเริ่มต้น'); return false; }
-      if (new Date(end).getTime() - new Date(start).getTime() > 24 * 60 * 60 * 1000) { alert('ไม่สามารถจองห้องต่อเนื่องเกิน 24 ชั่วโมงได้'); return false; }
+      if (!start || !end) { Swal.fire('ข้อมูลไม่ครบ', 'กรุณาเลือกช่วงเวลา', 'warning'); return false; }
+      if (new Date(start) < new Date()) { Swal.fire('ผิดพลาด', 'ไม่สามารถจองวันที่ผ่านมาแล้วได้', 'error'); return false; }
+      if (new Date(end) <= new Date(start)) { Swal.fire('ผิดพลาด', 'วันสิ้นสุดต้องอยู่หลังวันเริ่มต้น', 'error'); return false; }
+      if (new Date(end).getTime() - new Date(start).getTime() > 24 * 60 * 60 * 1000) { Swal.fire('ผิดพลาด', 'ไม่สามารถจองห้องต่อเนื่องเกิน 24 ชั่วโมงได้', 'error'); return false; }
       return true;
     }
 
@@ -215,10 +226,14 @@
     // ฟังก์ชันดึงรายการห้องประชุมจากเซิร์ฟเวอร์ โดยรองรับการส่งคำค้นหาและช่วงเวลาเพื่อหาห้องว่าง
     async function loadRooms() {
       const search = searchInput.value.trim();
+      const capacity = capacityInput.value.trim();
+      const facilities = facilitiesInput.value.trim();
       const start = startInput.value;
       const end = endInput.value;
       const params = new URLSearchParams();
       if (search) params.append('search', search);
+      if (capacity) params.append('capacity', capacity);
+      if (facilities) params.append('facilities', facilities);
       if (start && end) {
         params.append('status', 'available');
         params.append('start', new Date(start).toISOString());
@@ -247,6 +262,7 @@
             <div class="room-capacity">${room.capacity} คน</div>
             <div class="room-meta">
               <p><strong>ตำแหน่ง:</strong> ${room.location}</p>
+              <p><strong>สิ่งอำนวยความสะดวก:</strong> ${room.facilities || '-'}</p>
               <p>${room.description || ''}</p>
             </div>
             <div class="card-action">
@@ -271,7 +287,7 @@
     function openBookingModal(room) {
       if (!validateDates()) return;
       if (!currentUser || currentUser.role === 'admin') {
-        alert('กรุณาเข้าสู่ระบบด้วยบัญชีนิสิตหรือบุคลากรเพื่อจอง');
+        Swal.fire('ปฏิเสธการเข้าถึง', 'กรุณาเข้าสู่ระบบด้วยบัญชีนิสิตหรือบุคลากรเพื่อจอง', 'warning');
         return;
       }
       selectedRoom = room;
@@ -318,11 +334,11 @@
         });
         const data = await res.json();
         if (!res.ok || data.error) {
-          msgEl.textContent = data.error || 'เกิดข้อผิดพลาด';
+          Swal.fire('ไม่สามารถจองได้', data.error || 'เกิดข้อผิดพลาด', 'error');
           return;
         }
         closeModal();
-        alert('✓ จองสำเร็จ! รหัสการจอง: #' + data.id);
+        Swal.fire('สำเร็จ!', 'จองสำเร็จ! รหัสการจอง: #' + data.id, 'success');
         loadRooms();
       } catch (e) {
         msgEl.textContent = 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้';
@@ -340,9 +356,9 @@
       const start = startInput.value;
       const end = endInput.value;
       if (start && end) {
-        if (new Date(start) < new Date()) return alert('ไม่สามารถค้นหาห้องว่างในวันที่ผ่านมาแล้วได้');
-        if (new Date(end) <= new Date(start)) return alert('วันสิ้นสุดต้องอยู่หลังวันเริ่มต้น');
-        if (new Date(end).getTime() - new Date(start).getTime() > 24 * 60 * 60 * 1000) return alert('ไม่สามารถค้นหาช่วงเวลาที่เกิน 24 ชั่วโมงได้');
+        if (new Date(start) < new Date()) return Swal.fire('ผิดพลาด', 'ไม่สามารถค้นหาห้องว่างในวันที่ผ่านมาแล้วได้', 'warning');
+        if (new Date(end) <= new Date(start)) return Swal.fire('ผิดพลาด', 'วันสิ้นสุดต้องอยู่หลังวันเริ่มต้น', 'warning');
+        if (new Date(end).getTime() - new Date(start).getTime() > 24 * 60 * 60 * 1000) return Swal.fire('ผิดพลาด', 'ไม่สามารถค้นหาช่วงเวลาที่เกิน 24 ชั่วโมงได้', 'warning');
       }
       loadRooms();
     });

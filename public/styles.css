@@ -1107,6 +1107,44 @@ input, select, textarea, button {
   }
 }
 
+@media (max-width: 428px) {
+  .hero-band {
+    min-height: 250px;
+    padding: var(--space-lg) var(--space-md);
+  }
+
+  .hero-band .hero-content h1 {
+    font-size: 24px;
+  }
+
+  .display-xl { font-size: 36px; }
+  .display-lg { font-size: 32px; }
+  .display-md { font-size: 28px; }
+  .display-sm { font-size: 24px; }
+
+  .button {
+    padding: 12px 20px;
+    height: 42px;
+    font-size: 12px;
+  }
+
+  .field input,
+  .field select,
+  .field textarea {
+    height: 42px;
+    font-size: 14px;
+  }
+
+  .topbar {
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+  
+  .topbar .nav-actions {
+    gap: var(--space-sm);
+  }
+}
+
 /* ── Scrollbar ─────────────────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 6px;

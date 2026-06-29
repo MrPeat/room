@@ -1,0 +1,8 @@
+node_modules
+data.sqlite
+.git
+.gitignore
+README.md
+Dockerfile
+docker-compose.yml
+render.yaml

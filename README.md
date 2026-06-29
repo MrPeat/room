@@ -43,7 +43,22 @@ npm start
 ## หน้าใหม่
 - Student Dashboard: `http://localhost:3000/student.html`
 - Admin: `http://localhost:3000/admin.html`
+
+## Docker
+
+สร้างและรันด้วย Docker Compose:
+
+```powershell
+docker compose up --build
 ```
+
+เปิดเว็บเบราว์เซอร์ที่:
+
+```text
+http://localhost:3000/login.html
+```
+
+ข้อมูลฐานข้อมูลจะถูกเก็บไว้ใน volume ชื่อ `room-booking-prototype_app-data`
 
 ## บัญชีตัวอย่าง
 

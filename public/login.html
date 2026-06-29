@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>เข้าสู่ระบบ | ระบบจองห้องประชุม ทักษิณ</title>
   <link rel="stylesheet" href="/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <style>
     .tab-group { display: flex; margin-bottom: var(--space-lg); border-bottom: 1px solid var(--color-hairline); }
     .tab-btn { flex: 1; padding: var(--space-sm) 0; background: none; border: none; color: var(--color-muted); font-family: var(--font-display); font-size: 14px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; position: relative; transition: color 0.2s; }
@@ -126,7 +127,7 @@
       const password = document.getElementById('loginPassword').value;
 
       if (!userId || !password) {
-        loginMessage.textContent = 'กรุณากรอกรหัสผู้ใช้และรหัสผ่าน';
+        Swal.fire('ข้อมูลไม่ครบ', 'กรุณากรอกรหัสผู้ใช้และรหัสผ่าน', 'warning');
         return;
       }
 
@@ -138,7 +139,7 @@
         });
         const data = await response.json();
         if (!response.ok) {
-          loginMessage.textContent = data.error || 'เกิดข้อผิดพลาด';
+          Swal.fire('เข้าสู่ระบบไม่สำเร็จ', data.error || 'เกิดข้อผิดพลาด', 'error');
           return;
         }
         if (data.role === 'admin') {
@@ -147,7 +148,7 @@
           window.location.href = '/index.html';
         }
       } catch (e) {
-        loginMessage.textContent = 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้';
+        Swal.fire('ผิดพลาด', 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้', 'error');
       }
     });
 
@@ -166,15 +167,15 @@
       const passwordConfirm = document.getElementById('regPasswordConfirm').value;
 
       if (!userId || !fullName || !password) {
-        regMessage.textContent = 'กรุณากรอกข้อมูลให้ครบ';
+        Swal.fire('ข้อมูลไม่ครบ', 'กรุณากรอกข้อมูลให้ครบ', 'warning');
         return;
       }
       if (password !== passwordConfirm) {
-        regMessage.textContent = 'รหัสผ่านไม่ตรงกัน กรุณากรอกใหม่';
+        Swal.fire('ข้อมูลไม่ถูกต้อง', 'รหัสผ่านไม่ตรงกัน กรุณากรอกใหม่', 'warning');
         return;
       }
       if (password.length < 4) {
-        regMessage.textContent = 'รหัสผ่านต้องมีอย่างน้อย 4 ตัวอักษร';
+        Swal.fire('ข้อมูลไม่ถูกต้อง', 'รหัสผ่านต้องมีอย่างน้อย 4 ตัวอักษร', 'warning');
         return;
       }
 
@@ -186,18 +187,17 @@
         });
         const data = await response.json();
         if (!response.ok) {
-          regMessage.textContent = data.error || 'เกิดข้อผิดพลาด';
+          Swal.fire('สมัครสมาชิกไม่สำเร็จ', data.error || 'เกิดข้อผิดพลาด', 'error');
           return;
         }
-        regSuccess.textContent = `✓ สมัครสมาชิกสำเร็จ! คุณสามารถเข้าสู่ระบบด้วยรหัส "${userId}" ได้แล้ว`;
-        regSuccess.style.display = 'block';
+        Swal.fire('สำเร็จ!', `สมัครสมาชิกสำเร็จ! คุณสามารถเข้าสู่ระบบด้วยรหัส "${userId}" ได้แล้ว`, 'success');
         // Clear form
         document.getElementById('regUserId').value = '';
         document.getElementById('regFullName').value = '';
         document.getElementById('regPassword').value = '';
         document.getElementById('regPasswordConfirm').value = '';
       } catch (e) {
-        regMessage.textContent = 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้';
+        Swal.fire('ผิดพลาด', 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้', 'error');
       }
     });
   </script>

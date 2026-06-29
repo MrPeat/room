@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Admin Dashboard | ระบบจองห้องประชุม ทักษิณ</title>
   <link rel="stylesheet" href="/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body>
   <div class="topbar">
@@ -57,8 +58,12 @@
         </div>
       </div>
       <div class="field">
+        <label for="facilities">สิ่งอำนวยความสะดวก</label>
+        <input id="facilities" placeholder="เช่น โปรเจคเตอร์, กระดานไวท์บอร์ด, ปลั๊กพ่วง" />
+      </div>
+      <div class="field">
         <label for="description">รายละเอียดเพิ่มเติม</label>
-        <textarea id="description" rows="3" placeholder="ระบุอุปกรณ์ที่มี หรือรายละเอียดอื่นๆ"></textarea>
+        <textarea id="description" rows="3" placeholder="ระบุรายละเอียดอื่นๆ"></textarea>
       </div>
       <button class="button primary" id="saveRoomBtn">บันทึกข้อมูลห้อง</button>
     </div>
@@ -175,17 +180,27 @@
 
     // ฟังก์ชันสำหรับอัปเดตสถานะของการจอง (เช่น เปลี่ยนเป็น 'confirmed' อนุมัติ หรือ 'cancelled' ปฏิเสธ)
     async function updateBookingStatus(id, newStatus) {
-      if (!confirm('ยืนยันการเปลี่ยนสถานะการจอง?')) return;
+      const result = await Swal.fire({
+        title: 'ยืนยันการเปลี่ยนสถานะ?',
+        text: 'คุณต้องการเปลี่ยนสถานะการจองนี้ใช่หรือไม่',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'ยืนยัน',
+        cancelButtonText: 'ยกเลิก'
+      });
+      if (!result.isConfirmed) return;
+
       const res = await fetch(`/api/admin/bookings/${id}/status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus })
       });
       if (res.ok) {
+        Swal.fire('สำเร็จ', 'เปลี่ยนสถานะการจองแล้ว', 'success');
         loadBookings();
       } else {
         const data = await res.json();
-        alert(data.error || 'เกิดข้อผิดพลาด');
+        Swal.fire('ผิดพลาด', data.error || 'เกิดข้อผิดพลาด', 'error');
       }
     }
 
@@ -261,19 +276,23 @@
       const location = document.getElementById('location').value.trim();
       const capacity = document.getElementById('capacity').value.trim();
       const description = document.getElementById('description').value.trim();
+      const facilities = document.getElementById('facilities').value.trim();
       const active = document.getElementById('active').value;
-      if (!name || !location || !capacity) return alert('กรุณากรอกข้อมูลห้องให้ครบ');
-      const body = { name, location, capacity: Number(capacity), description, active: active === '1' };
+      if (!name || !location || !capacity) return Swal.fire('ข้อมูลไม่ครบ', 'กรุณากรอกข้อมูลห้องให้ครบ', 'warning');
+      const body = { name, location, capacity: Number(capacity), description, facilities, active: active === '1' };
       const url = editRoomId ? `/api/admin/rooms/${editRoomId}` : '/api/admin/rooms';
       const method = editRoomId ? 'PUT' : 'POST';
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const data = await res.json();
-      if (data.error) return alert(data.error);
+      if (data.error) return Swal.fire('ผิดพลาด', data.error, 'error');
+      
+      Swal.fire('สำเร็จ', editRoomId ? 'แก้ไขข้อมูลห้องสำเร็จ' : 'เพิ่มห้องประชุมใหม่สำเร็จ', 'success');
       editRoomId = null;
       document.getElementById('name').value = '';
       document.getElementById('location').value = '';
       document.getElementById('capacity').value = '';
       document.getElementById('description').value = '';
+      document.getElementById('facilities').value = '';
       document.getElementById('active').value = '1';
       saveRoomBtn.textContent = 'บันทึกข้อมูลห้อง';
       loadRooms();
@@ -295,13 +314,23 @@
         document.getElementById('location').value = room.location;
         document.getElementById('capacity').value = room.capacity;
         document.getElementById('description').value = room.description;
+        document.getElementById('facilities').value = room.facilities || '';
         document.getElementById('active').value = room.active ? '1' : '0';
         saveRoomBtn.textContent = 'อัปเดตข้อมูลห้อง';
         window.scrollTo(0, 0);
       }
       if (action === 'delete') {
-        if (!confirm('ลบห้องนี้หรือไม่?')) return;
+        const result = await Swal.fire({
+          title: 'ยืนยันการลบ?',
+          text: 'คุณต้องการลบห้องนี้ใช่หรือไม่',
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonText: 'ลบ',
+          cancelButtonText: 'ยกเลิก'
+        });
+        if (!result.isConfirmed) return;
         await fetch(`/api/admin/rooms/${id}`, { method: 'DELETE' });
+        Swal.fire('สำเร็จ', 'ลบห้องแล้ว', 'success');
         loadRooms();
       }
     });
@@ -316,13 +345,22 @@
     // Attach function to window so it can be called from onclick handlers in table
     window.updateBookingStatus = updateBookingStatus;
     window.resetUserPassword = async function(userId) {
-      if (!confirm(`คุณต้องการรีเซ็ตรหัสผ่านของผู้ใช้รหัส ${userId} เป็น "1234" ใช่หรือไม่?`)) return;
+      const result = await Swal.fire({
+        title: 'ยืนยันการรีเซ็ตรหัสผ่าน?',
+        text: `คุณต้องการรีเซ็ตรหัสผ่านของผู้ใช้ ${userId} เป็น "1234" ใช่หรือไม่?`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'รีเซ็ต',
+        cancelButtonText: 'ยกเลิก'
+      });
+      if (!result.isConfirmed) return;
+
       const res = await fetch(`/api/admin/users/${userId}/reset-password`, { method: 'POST' });
       const data = await res.json();
       if (res.ok) {
-        alert(`รีเซ็ตรหัสผ่านสำเร็จ!\nรหัสผ่านชั่วคราวสำหรับผู้ใช้ ${userId} คือ: 1234`);
+        Swal.fire('รีเซ็ตสำเร็จ', `รหัสผ่านชั่วคราวสำหรับ ${userId} คือ: 1234`, 'success');
       } else {
-        alert(data.error || 'เกิดข้อผิดพลาดในการรีเซ็ตรหัสผ่าน');
+        Swal.fire('ผิดพลาด', data.error || 'เกิดข้อผิดพลาดในการรีเซ็ตรหัสผ่าน', 'error');
       }
     };
 

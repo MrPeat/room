@@ -1,29 +1,30 @@
 // นำเข้าโมดูล sqlite3 สำหรับจัดการฐานข้อมูล SQLite
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
-// นำเข้าโมดูล crypto สำหรับเข้ารหัสข้อมูล (เช่น รหัสผ่าน)
-const crypto = require('crypto');
+const fs = require('fs');
+// นำเข้าโมดูล bcrypt สำหรับเข้ารหัสข้อมูล (เช่น รหัสผ่าน)
+const bcrypt = require('bcrypt');
 
 // กำหนดตำแหน่งที่เก็บไฟล์ฐานข้อมูล
 // ใช้ persistent disk ของ Render ถ้ามี, ไม่งั้น fallback ไป local
-const dataDir = process.env.RENDER_DATA_DIR || __dirname;
-const dbFile = path.join(dataDir, 'data.sqlite');
+const dataDir = process.env.DB_PATH
+  ? path.dirname(process.env.DB_PATH)
+  : (process.env.RENDER_DATA_DIR || __dirname);
+const dbFile = process.env.DB_PATH || path.join(dataDir, 'data.sqlite');
+fs.mkdirSync(path.dirname(dbFile), { recursive: true });
 // สร้างหรือเชื่อมต่อกับไฟล์ฐานข้อมูล SQLite
 const db = new sqlite3.Database(dbFile);
 
-// ── Password hashing (SHA-256 + salt) ──
+// ── Password hashing (bcrypt) ──
 // ฟังก์ชันสำหรับเข้ารหัสรหัสผ่าน เพื่อป้องกันการเก็บรหัสผ่านเป็นข้อความธรรมดา
-function hashPassword(password, salt) {
-  // หากไม่มี Salt (สำหรับผู้ใช้ใหม่) ให้สุ่มชุดอักขระขึ้นมา
-  if (!salt) salt = crypto.randomBytes(16).toString('hex');
-  // นำ Salt มาต่อกับรหัสผ่าน แล้วนำไปเข้ารหัสด้วยวิธี SHA-256
-  const hash = crypto.createHash('sha256').update(salt + password).digest('hex');
-  return { hash, salt };
+function hashPassword(password) {
+  const saltRounds = 10;
+  const hash = bcrypt.hashSync(password, saltRounds);
+  return { hash };
 }
 
-function verifyPassword(password, hash, salt) {
-  const check = crypto.createHash('sha256').update(salt + password).digest('hex');
-  return check === hash;
+function verifyPassword(password, hash) {
+  return bcrypt.compareSync(password, hash);
 }
 
 // ฟังก์ชันเตรียมความพร้อมของฐานข้อมูล (สร้างตารางและข้อมูลเริ่มต้น)
@@ -36,6 +37,7 @@ function initialize() {
       location TEXT NOT NULL,
       capacity INTEGER NOT NULL,
       description TEXT,
+      facilities TEXT,
       active INTEGER NOT NULL DEFAULT 1
     )`);
 
@@ -46,7 +48,6 @@ function initialize() {
       full_name TEXT NOT NULL,
       role TEXT NOT NULL DEFAULT 'student',
       password_hash TEXT NOT NULL,
-      password_salt TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`);
 
@@ -73,9 +74,9 @@ function initialize() {
     // ตรวจสอบว่าในระบบมีแอดมินหรือยัง ถ้ายังให้สร้างแอดมินเริ่มต้น
     db.get('SELECT COUNT(*) AS count FROM users WHERE role = ?', ['admin'], (err, row) => {
       if (!err && row.count === 0) {
-        const { hash, salt } = hashPassword('admin123');
-        db.run('INSERT INTO users (user_id, full_name, role, password_hash, password_salt) VALUES (?, ?, ?, ?, ?)',
-          ['admin', 'ผู้ดูแลระบบ', 'admin', hash, salt]);
+        const { hash } = hashPassword('admin123');
+        db.run('INSERT INTO users (user_id, full_name, role, password_hash) VALUES (?, ?, ?, ?)',
+          ['admin', 'ผู้ดูแลระบบ', 'admin', hash]);
       }
     });
 
@@ -84,18 +85,18 @@ function initialize() {
     db.get('SELECT COUNT(*) AS count FROM rooms', (err, row) => {
       if (!err && row.count === 0) {
         const sampleRooms = [
-          ['ห้องประชุมป่าพะยอม', 'อาคารหอประชุมเฉลิมพระเกียรติ ชั้น 2', 200, 'ห้องประชุมขนาดใหญ่ รองรับงานสัมมนาและพิธีการ พร้อมระบบเสียงและโปรเจคเตอร์'],
-          ['ห้องประชุมควนขนุน', 'อาคารหอประชุมเฉลิมพระเกียรติ ชั้น 1 (ด้านหน้า)', 30, 'ห้องประชุมขนาดเล็ก เหมาะสำหรับประชุมกลุ่มย่อย'],
-          ['ห้องประชุมศรีบรรพต', 'อาคารหอประชุมเฉลิมพระเกียรติ ชั้น 1 (ห้องกระจก)', 80, 'ห้องประชุมขนาดใหญ่ ผนังกระจก บรรยากาศโปร่งโล่ง'],
-          ['ห้องประชุมศรีนครินทร์', 'อาคารหอประชุมเฉลิมพระเกียรติ ชั้น 1', 50, 'ห้องประชุมขนาดกลาง พร้อมโต๊ะประชุมและระบบนำเสนอ'],
-          ['ห้องประชุมราชพฤกษ์', 'อาคารสัมมนาคาร', 150, 'ห้องประชุมขนาดใหญ่ รองรับงานสัมมนาและอบรม พร้อมระบบแสงเสียงครบครัน'],
-          ['ห้องประชุมบัวหลวง', 'อาคารสัมมนาคาร', 60, 'ห้องประชุมขนาดกลาง เหมาะสำหรับประชุมเชิงปฏิบัติการ'],
-          ['ห้องประชุมบัวหลวง 1', 'อาคารสัมมนาคาร', 30, 'ห้องประชุมขนาดเล็ก พร้อมอุปกรณ์โสตทัศนูปกรณ์'],
-          ['ห้องประชุมบัวหลวง 2', 'อาคารสัมมนาคาร', 30, 'ห้องประชุมขนาดเล็ก พร้อมอุปกรณ์โสตทัศนูปกรณ์'],
-          ['ห้องประชุม MF 3200', 'อาคารเรียนรวม', 200, 'ห้องประชุมสัมมนาขนาดใหญ่ พร้อมระบบประชุมทางไกล (Video Conference)'],
-          ['ห้องประชุมจิรพรรณ (NS2112)', 'อาคารคณะพยาบาลศาสตร์ ชั้น 1', 40, 'ห้องประชุมคณะพยาบาลศาสตร์ พร้อมจอแสดงผลและระบบเสียง']
+          ['ห้องประชุมป่าพะยอม', 'อาคารหอประชุมเฉลิมพระเกียรติ ชั้น 2', 200, 'ห้องประชุมขนาดใหญ่ รองรับงานสัมมนาและพิธีการ พร้อมระบบเสียงและโปรเจคเตอร์', 'โปรเจคเตอร์, ปลั๊กพ่วง, ไมโครโฟน, เครื่องเสียง'],
+          ['ห้องประชุมควนขนุน', 'อาคารหอประชุมเฉลิมพระเกียรติ ชั้น 1 (ด้านหน้า)', 30, 'ห้องประชุมขนาดเล็ก เหมาะสำหรับประชุมกลุ่มย่อย', 'กระดานไวท์บอร์ด, ปลั๊กพ่วง, สมาร์ททีวี'],
+          ['ห้องประชุมศรีบรรพต', 'อาคารหอประชุมเฉลิมพระเกียรติ ชั้น 1 (ห้องกระจก)', 80, 'ห้องประชุมขนาดใหญ่ ผนังกระจก บรรยากาศโปร่งโล่ง', 'โปรเจคเตอร์, ปลั๊กพ่วง, กระดานไวท์บอร์ด'],
+          ['ห้องประชุมศรีนครินทร์', 'อาคารหอประชุมเฉลิมพระเกียรติ ชั้น 1', 50, 'ห้องประชุมขนาดกลาง พร้อมโต๊ะประชุมและระบบนำเสนอ', 'โปรเจคเตอร์, ไมโครโฟน'],
+          ['ห้องประชุมราชพฤกษ์', 'อาคารสัมมนาคาร', 150, 'ห้องประชุมขนาดใหญ่ รองรับงานสัมมนาและอบรม พร้อมระบบแสงเสียงครบครัน', 'โปรเจคเตอร์, ปลั๊กพ่วง, ไมโครโฟน, เครื่องเสียง'],
+          ['ห้องประชุมบัวหลวง', 'อาคารสัมมนาคาร', 60, 'ห้องประชุมขนาดกลาง เหมาะสำหรับประชุมเชิงปฏิบัติการ', 'โปรเจคเตอร์, กระดานไวท์บอร์ด'],
+          ['ห้องประชุมบัวหลวง 1', 'อาคารสัมมนาคาร', 30, 'ห้องประชุมขนาดเล็ก พร้อมอุปกรณ์โสตทัศนูปกรณ์', 'สมาร์ททีวี, ปลั๊กพ่วง'],
+          ['ห้องประชุมบัวหลวง 2', 'อาคารสัมมนาคาร', 30, 'ห้องประชุมขนาดเล็ก พร้อมอุปกรณ์โสตทัศนูปกรณ์', 'สมาร์ททีวี, ปลั๊กพ่วง'],
+          ['ห้องประชุม MF 3200', 'อาคารเรียนรวม', 200, 'ห้องประชุมสัมมนาขนาดใหญ่ พร้อมระบบประชุมทางไกล (Video Conference)', 'โปรเจคเตอร์, ระบบประชุมทางไกล, ไมโครโฟน'],
+          ['ห้องประชุมจิรพรรณ (NS2112)', 'อาคารคณะพยาบาลศาสตร์ ชั้น 1', 40, 'ห้องประชุมคณะพยาบาลศาสตร์ พร้อมจอแสดงผลและระบบเสียง', 'โปรเจคเตอร์, ไมโครโฟน']
         ];
-        const stmt = db.prepare('INSERT INTO rooms (name, location, capacity, description) VALUES (?, ?, ?, ?)');
+        const stmt = db.prepare('INSERT INTO rooms (name, location, capacity, description, facilities) VALUES (?, ?, ?, ?, ?)');
         sampleRooms.forEach(room => stmt.run(room));
         stmt.finalize();
       }

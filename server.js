@@ -2,7 +2,9 @@
 const express = require('express');
 const path = require('path');
 const cookieParser = require('cookie-parser'); // ใช้สำหรับอ่านค่าคุกกี้
+const jwt = require('jsonwebtoken');
 const { db, initialize, hashPassword, verifyPassword } = require('./db'); // นำเข้าฟังก์ชันเกี่ยวกับฐานข้อมูลจากไฟล์ db.js
+const JWT_SECRET = process.env.JWT_SECRET || 'secret123';
 
 const app = express();
 const PORT = process.env.PORT || 3000; // กำหนดพอร์ตสำหรับรันเซิร์ฟเวอร์ (ค่าเริ่มต้นคือ 3000)
@@ -25,15 +27,32 @@ initialize();
 // มิดเดิลแวร์ (Middleware) สำหรับตรวจสอบสิทธิ์ผู้ดูแลระบบ (Admin)
 // จะยอมให้ผ่านไปทำงานต่อได้เฉพาะผู้ที่ล็อกอินและมี role เป็น 'admin' เท่านั้น
 function requireAdmin(req, res, next) {
-  if (req.cookies.role === 'admin' && req.cookies.userId) return next();
-  return res.status(401).json({ error: 'Unauthorized' });
+  const token = req.cookies.jwt;
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (decoded.role === 'admin') {
+      req.user = decoded;
+      return next();
+    }
+    return res.status(403).json({ error: 'Forbidden' });
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
 }
 
 // มิดเดิลแวร์ (Middleware) สำหรับตรวจสอบว่าเข้าสู่ระบบหรือยัง
 // จะยอมให้ผ่านไปทำงานต่อได้ก็ต่อเมื่อมีข้อมูลล็อกอินในคุกกี้แล้วเท่านั้น
 function requireAuth(req, res, next) {
-  if (req.cookies.role && req.cookies.userId) return next();
-  return res.status(401).json({ error: 'Unauthorized' });
+  const token = req.cookies.jwt;
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
+    return next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
 }
 
 // ═══════════════════════════════════════
@@ -57,9 +76,9 @@ app.post('/api/register', (req, res) => {
     if (err) return res.status(500).json({ error: err.message });
     if (existing) return res.status(409).json({ error: 'รหัสนี้ถูกใช้งานแล้ว กรุณาใช้รหัสอื่น' });
 
-    const { hash, salt } = hashPassword(password);
-    db.run('INSERT INTO users (user_id, full_name, role, password_hash, password_salt) VALUES (?, ?, ?, ?, ?)',
-      [userId, fullName, userRole, hash, salt], function (insertErr) {
+    const { hash } = hashPassword(password);
+    db.run('INSERT INTO users (user_id, full_name, role, password_hash) VALUES (?, ?, ?, ?)',
+      [userId, fullName, userRole, hash], function (insertErr) {
         if (insertErr) return res.status(500).json({ error: insertErr.message });
         res.json({ success: true, userId, role: userRole, fullName });
       });
@@ -81,7 +100,7 @@ app.post('/api/login', (req, res) => {
     if (!user) return res.status(401).json({ error: 'ไม่พบบัญชีผู้ใช้นี้ กรุณาสมัครสมาชิกก่อน' });
 
     // ตรวจสอบรหัสผ่าน
-    if (!verifyPassword(password, user.password_hash, user.password_salt)) {
+    if (!verifyPassword(password, user.password_hash)) {
       return res.status(401).json({ error: 'รหัสผ่านไม่ถูกต้อง' });
     }
 
@@ -90,12 +109,17 @@ app.post('/api/login', (req, res) => {
       return res.status(401).json({ error: `บัญชีนี้ลงทะเบียนเป็น "${user.role === 'student' ? 'นิสิต' : user.role === 'staff' ? 'บุคลากร' : 'ผู้ดูแลระบบ'}" ไม่ใช่ประเภทที่เลือก` });
     }
 
+    // สร้าง JWT
+    const token = jwt.sign({ userId: user.user_id, role: user.role, fullName: user.full_name }, JWT_SECRET, { expiresIn: '24h' });
+
     // ตั้งค่า cookies
-    res.cookie('role', user.role, { httpOnly: true });
-    res.cookie('userId', user.user_id, { httpOnly: true });
+    res.cookie('jwt', token, { httpOnly: true });
+    res.cookie('role', user.role);
+    res.cookie('userId', user.user_id);
 
     return res.json({
       success: true,
+      token,
       role: user.role,
       userId: user.user_id,
       fullName: user.full_name
@@ -106,10 +130,8 @@ app.post('/api/login', (req, res) => {
 // ═══════════════════════════════════════
 // ดึงข้อมูลผู้ใช้ปัจจุบัน (API Endpoint สำหรับเช็คว่าใครกำลังล็อกอินอยู่)
 // ═══════════════════════════════════════
-app.get('/api/me', (req, res) => {
-  const userId = req.cookies.userId;
-  const role = req.cookies.role;
-  if (!userId || !role) return res.status(401).json({ error: 'Unauthorized' });
+app.get('/api/me', requireAuth, (req, res) => {
+  const userId = req.user.userId;
 
   db.get('SELECT user_id, full_name, role, created_at FROM users WHERE user_id = ?', [userId], (err, user) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -122,13 +144,26 @@ app.get('/api/me', (req, res) => {
 // รายการห้องประชุม (API Endpoint สาธารณะ สำหรับดึงรายชื่อห้องทั้งหมดและค้นหา)
 // ═══════════════════════════════════════
 app.get('/api/rooms', (req, res) => {
-  const { status, start, end, search } = req.query;
+  const { status, start, end, search, capacity, facilities } = req.query;
   let sql = 'SELECT * FROM rooms WHERE active = 1';
   const params = [];
 
   if (search) {
     sql += ' AND (name LIKE ? OR location LIKE ? OR description LIKE ?)';
     params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+  }
+
+  if (capacity) {
+    sql += ' AND capacity >= ?';
+    params.push(Number(capacity));
+  }
+
+  if (facilities) {
+    const facs = facilities.split(',');
+    facs.forEach(fac => {
+      sql += ' AND facilities LIKE ?';
+      params.push(`%${fac.trim()}%`);
+    });
   }
 
   db.all(sql, params, (err, rows) => {
@@ -160,8 +195,8 @@ app.get('/api/rooms', (req, res) => {
 // ═══════════════════════════════════════
 app.post('/api/bookings', requireAuth, (req, res) => {
   const { roomId, start, end, note } = req.body;
-  const bookerId = req.cookies.userId;
-  const bookerType = req.cookies.role;
+  const bookerId = req.user.userId;
+  const bookerType = req.user.role;
 
   if (bookerType === 'admin') {
     return res.status(403).json({ error: 'ผู้ดูแลระบบไม่สามารถจองห้องได้' });
@@ -220,21 +255,21 @@ app.get('/api/admin/rooms', requireAdmin, (req, res) => {
 });
 
 app.post('/api/admin/rooms', requireAdmin, (req, res) => {
-  const { name, location, capacity, description, active } = req.body;
+  const { name, location, capacity, description, facilities, active } = req.body;
   if (!name || !location || !capacity) return res.status(400).json({ error: 'Missing required fields' });
-  db.run('INSERT INTO rooms (name, location, capacity, description, active) VALUES (?, ?, ?, ?, ?)', [name, location, capacity, description || '', active ? 1 : 0], function (err) {
+  db.run('INSERT INTO rooms (name, location, capacity, description, facilities, active) VALUES (?, ?, ?, ?, ?, ?)', [name, location, capacity, description || '', facilities || '', active ? 1 : 0], function (err) {
     if (err) return res.status(500).json({ error: err.message });
-    res.json({ id: this.lastID, name, location, capacity, description, active: active ? 1 : 0 });
+    res.json({ id: this.lastID, name, location, capacity, description, facilities, active: active ? 1 : 0 });
   });
 });
 
 app.put('/api/admin/rooms/:id', requireAdmin, (req, res) => {
   const { id } = req.params;
-  const { name, location, capacity, description, active } = req.body;
-  db.run('UPDATE rooms SET name = ?, location = ?, capacity = ?, description = ?, active = ? WHERE id = ?', [name, location, capacity, description || '', active ? 1 : 0, id], function (err) {
+  const { name, location, capacity, description, facilities, active } = req.body;
+  db.run('UPDATE rooms SET name = ?, location = ?, capacity = ?, description = ?, facilities = ?, active = ? WHERE id = ?', [name, location, capacity, description || '', facilities || '', active ? 1 : 0, id], function (err) {
     if (err) return res.status(500).json({ error: err.message });
     if (this.changes === 0) return res.status(404).json({ error: 'Room not found' });
-    res.json({ id: Number(id), name, location, capacity, description, active: active ? 1 : 0 });
+    res.json({ id: Number(id), name, location, capacity, description, facilities, active: active ? 1 : 0 });
   });
 });
 
@@ -288,9 +323,9 @@ app.post('/api/admin/users/:userId/reset-password', requireAdmin, (req, res) => 
   const { userId } = req.params;
   
   // สร้างรหัสผ่านชั่วคราว "1234"
-  const { hash, salt } = hashPassword('1234');
+  const { hash } = hashPassword('1234');
   
-  db.run('UPDATE users SET password_hash = ?, password_salt = ? WHERE user_id = ?', [hash, salt, userId], function (err) {
+  db.run('UPDATE users SET password_hash = ? WHERE user_id = ?', [hash, userId], function (err) {
     if (err) return res.status(500).json({ error: err.message });
     if (this.changes === 0) return res.status(404).json({ error: 'User not found' });
     res.json({ success: true, userId });
@@ -300,9 +335,8 @@ app.post('/api/admin/users/:userId/reset-password', requireAdmin, (req, res) => 
 // ═══════════════════════════════════════
 // User - การจองของฉัน (API สำหรับผู้ใช้ทั่วไปดูประวัติการจองของตนเอง และยกเลิกการจอง)
 // ═══════════════════════════════════════
-app.get('/api/user/bookings', (req, res) => {
-  const userId = req.cookies.userId;
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+app.get('/api/user/bookings', requireAuth, (req, res) => {
+  const userId = req.user.userId;
   db.all(`SELECT b.*, r.name AS room_name, r.location AS room_location 
           FROM bookings b 
           LEFT JOIN rooms r ON b.room_id = r.id 
@@ -313,10 +347,9 @@ app.get('/api/user/bookings', (req, res) => {
   });
 });
 
-app.post('/api/user/bookings/:id/cancel', (req, res) => {
-  const userId = req.cookies.userId;
+app.post('/api/user/bookings/:id/cancel', requireAuth, (req, res) => {
+  const userId = req.user.userId;
   const { id } = req.params;
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
   db.get('SELECT * FROM bookings WHERE id = ?', [id], (err, booking) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
@@ -328,10 +361,51 @@ app.post('/api/user/bookings/:id/cancel', (req, res) => {
   });
 });
 
+app.put('/api/user/bookings/:id', requireAuth, (req, res) => {
+  const userId = req.user.userId;
+  const { id } = req.params;
+  const { start, end, note } = req.body;
+  
+  if (!start || !end) return res.status(400).json({ error: 'กรุณาระบุเวลาเริ่มต้นและสิ้นสุด' });
+
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  const now = new Date();
+
+  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return res.status(400).json({ error: 'รูปแบบวันที่ไม่ถูกต้อง' });
+  if (startDate < now) return res.status(400).json({ error: 'ไม่สามารถจองวันที่ผ่านมาแล้วได้' });
+  if (endDate <= startDate) return res.status(400).json({ error: 'วันสิ้นสุดต้องอยู่หลังวันเริ่มต้น' });
+  if (endDate.getTime() - startDate.getTime() > 24 * 60 * 60 * 1000) return res.status(400).json({ error: 'ไม่สามารถจองห้องต่อเนื่องเกิน 24 ชั่วโมงได้' });
+
+  db.get('SELECT * FROM bookings WHERE id = ?', [id], (err, booking) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!booking) return res.status(404).json({ error: 'Booking not found' });
+    if (booking.booker_id !== userId) return res.status(403).json({ error: 'Forbidden' });
+    if (booking.status !== 'pending' && booking.status !== 'confirmed') {
+      return res.status(400).json({ error: 'ไม่สามารถแก้ไขการจองสถานะนี้ได้' });
+    }
+
+    db.all(
+      'SELECT * FROM bookings WHERE room_id = ? AND id != ? AND status != ? AND ? < end AND ? > start',
+      [booking.room_id, id, 'cancelled', start, end],
+      (err, conflicts) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (conflicts.length > 0) return res.status(409).json({ error: 'ห้องนี้ถูกจองในช่วงเวลานี้แล้ว กรุณาเลือกช่วงเวลาอื่น' });
+
+        db.run('UPDATE bookings SET start = ?, end = ?, note = ? WHERE id = ?', [start, end, note || '', id], function (updateErr) {
+          if (updateErr) return res.status(500).json({ error: updateErr.message });
+          res.json({ success: true, id: Number(id) });
+        });
+      }
+    );
+  });
+});
+
 // ═══════════════════════════════════════
 // Logout
 // ═══════════════════════════════════════
 app.get('/api/logout', (req, res) => {
+  res.clearCookie('jwt');
   res.clearCookie('role');
   res.clearCookie('userId');
   res.json({ success: true });
