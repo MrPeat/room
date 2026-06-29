@@ -10,7 +10,8 @@ services:
       db:
         condition: service_healthy
     networks:
-      - g07_network
+      - app_network
+      - course_network
 
   db:
     image: mysql:8.0
@@ -31,11 +32,13 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - g07_network
+      - app_network
 
 volumes:
   db-data:
 
 networks:
-  g07_network:
+  app_network:
     driver: bridge
+  course_network:
+    external: true
