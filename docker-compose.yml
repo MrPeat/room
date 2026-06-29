@@ -11,7 +11,7 @@ services:
         condition: service_healthy
     networks:
       - app_network
-      - course_network
+      - course_proxy
 
   db:
     image: mysql:8.0
@@ -40,5 +40,5 @@ volumes:
 networks:
   app_network:
     driver: bridge
-  course_network:
+  course_proxy:
     external: true
